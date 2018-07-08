@@ -1,6 +1,5 @@
 extern crate image;
 extern crate nalgebra;
-extern crate rand;
 extern crate wavefront_obj;
 extern crate failure;
 extern crate rusterizer;
@@ -10,8 +9,7 @@ use std::fs;
 use std::i32;
 
 use image::{imageops, ImageBuffer, Rgba};
-use nalgebra::Vector2;
-use rand::prelude::*;
+use nalgebra::{Vector2, Vector3};
 use wavefront_obj::obj::{self, Object, Primitive};
 use failure::Error;
 
@@ -21,13 +19,16 @@ fn black() -> Rgba<u8> {
     Rgba([0, 0, 0, 255])
 }
 
-fn random_color() -> Rgba<u8> {
-    Rgba([random(), random(), random(), 255])
+fn luma(intensity: f64) -> Rgba<u8> {
+    let intense = (255.0 * intensity) as u8;
+    Rgba([intense, intense, intense, 255])
 }
 
 fn main() -> Result<(), Error> {
     let mut args = env::args().skip(1);
     let path = args.next().expect("USAGE: prog path");
+
+    let light_dir = Vector3::new(0.0, 0.0, -1.0);
 
     const WIDTH: i32 = 800;
     const HEIGHT: i32 = 800;
@@ -59,11 +60,29 @@ fn main() -> Result<(), Error> {
                         let x3 = ((v3.x + 1.0) * HALF_WIDTH).floor() as i32;
                         let y3 = ((v3.y + 1.0) * HALF_HEIGHT).floor() as i32;
 
-                        let a = Vector2::new(x1, y1);
-                        let b = Vector2::new(x2, y2);
-                        let c = Vector2::new(x3, y3);
+                        let world_a = Vector3::new(v1.x, v1.y, v1.z);
+                        let world_b = Vector3::new(v2.x, v2.y, v2.z);
+                        let world_c = Vector3::new(v3.x, v3.y, v3.z);
 
-                        triangle(&mut image, random_color(), a, b, c);
+                        let normal =
+                            (world_c - world_a).cross(&(world_b - world_a));
+                        let norm_normal = nalgebra::normalize(&normal);
+                        let light_intensity =
+                            nalgebra::dot(&norm_normal, &light_dir);
+
+                        if light_intensity > 0.0 {
+                            let screen_a = Vector2::new(x1, y1);
+                            let screen_b = Vector2::new(x2, y2);
+                            let screen_c = Vector2::new(x3, y3);
+
+                            triangle(
+                                &mut image,
+                                luma(light_intensity),
+                                screen_a,
+                                screen_b,
+                                screen_c,
+                            );
+                        }
                     }
                     _ => { /* NO OP */ }
                 }
@@ -71,7 +90,7 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    imageops::flip_vertical(&image).save("./triangle.png")?;
+    imageops::flip_vertical(&image).save("./triangle-light.png")?;
 
     Ok(())
 }

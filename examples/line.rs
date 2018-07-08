@@ -1,5 +1,5 @@
-extern crate failure;
 extern crate image;
+extern crate failure;
 extern crate rusterizer;
 
 use failure::Error;
