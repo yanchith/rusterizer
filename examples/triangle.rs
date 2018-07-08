@@ -1,5 +1,7 @@
 extern crate failure;
 extern crate image;
+extern crate nalgebra;
+extern crate rand;
 extern crate rusterizer;
 extern crate wavefront_obj;
 
@@ -9,9 +11,11 @@ use std::i32;
 
 use failure::Error;
 use image::{imageops, ImageBuffer, Rgba};
+use nalgebra::Vector2;
+use rand::prelude::*;
 use wavefront_obj::obj::{self, Object, Primitive};
 
-use rusterizer::line_fast as line;
+use rusterizer::{line_fast as line, triangle};
 
 fn black() -> Rgba<u8> {
     Rgba([0, 0, 0, 255])
@@ -19,6 +23,10 @@ fn black() -> Rgba<u8> {
 
 fn white() -> Rgba<u8> {
     Rgba([255, 255, 255, 255])
+}
+
+fn random_color() -> Rgba<u8> {
+    Rgba([random(), random(), random(), 255])
 }
 
 fn main() -> Result<(), Error> {
@@ -56,9 +64,11 @@ fn main() -> Result<(), Error> {
                         let x3 = ((v3.x + 1.0) * HALF_WIDTH).floor() as i32;
                         let y3 = ((v3.y + 1.0) * HALF_HEIGHT).floor() as i32;
 
-                        line(&mut image, white, x1, y1, x2, y2);
-                        line(&mut image, white, x2, y2, x3, y3);
-                        line(&mut image, white, x3, y3, x1, y1);
+                        let a = Vector2::new(x1, y1);
+                        let b = Vector2::new(x2, y2);
+                        let c = Vector2::new(x3, y3);
+
+                        triangle(&mut image, random_color(), a, b, c);
                     }
                     _ => { /* NO OP */ }
                 }
@@ -66,7 +76,7 @@ fn main() -> Result<(), Error> {
         }
     }
 
-    imageops::flip_vertical(&image).save("./wireframe.png")?;
+    imageops::flip_vertical(&image).save("./triangle.png")?;
 
     Ok(())
 }

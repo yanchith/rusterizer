@@ -5,7 +5,7 @@ extern crate rusterizer;
 use failure::Error;
 use image::{ImageBuffer, Rgba};
 
-use rusterizer::{line_3, line_4, line_5};
+use rusterizer::{line_slow, line_fast};
 
 fn black() -> Rgba<u8> {
     Rgba([0, 0, 0, 255])
@@ -16,25 +16,19 @@ fn red() -> Rgba<u8> {
 }
 
 fn main() -> Result<(), Error> {
-    let mut image3 = ImageBuffer::from_pixel(6, 6, black());
-    let mut image4 = ImageBuffer::from_pixel(6, 6, black());
-    let mut image5 = ImageBuffer::from_pixel(6, 6, black());
+    let mut image_slow = ImageBuffer::from_pixel(6, 6, black());
+    let mut image_fast = ImageBuffer::from_pixel(6, 6, black());
 
-    line_3(2, 1, 5, 5, &mut image3, red());
-    line_3(5, 5, 1, 4, &mut image3, red());
-    line_3(1, 4, 2, 1, &mut image3, red());
+    line_slow(&mut image_slow, red(), 2, 1, 5, 5);
+    line_slow(&mut image_slow, red(), 5, 5, 1, 4);
+    line_slow(&mut image_slow, red(), 1, 4, 2, 1);
 
-    line_4(2, 1, 5, 5, &mut image4, red());
-    line_4(5, 5, 1, 4, &mut image4, red());
-    line_4(1, 4, 2, 1, &mut image4, red());
+    line_fast(&mut image_fast, red(), 2, 1, 5, 5);
+    line_fast(&mut image_fast, red(), 5, 5, 1, 4);
+    line_fast(&mut image_fast, red(), 1, 4, 2, 1);
 
-    line_5(2, 1, 5, 5, &mut image5, red());
-    line_5(5, 5, 1, 4, &mut image5, red());
-    line_5(1, 4, 2, 1, &mut image5, red());
-
-    image3.save("./image3.png")?;
-    image4.save("./image4.png")?;
-    image5.save("./image5.png")?;
+    image_slow.save("./image_slow.png")?;
+    image_fast.save("./image_fast.png")?;
 
     Ok(())
 }
