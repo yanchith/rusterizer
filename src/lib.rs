@@ -1,12 +1,15 @@
 extern crate image;
 extern crate nalgebra;
 
-use nalgebra::{Vector2, Vector3};
+mod z_buffer;
 
 use std::mem;
-use std::{f32, i32};
+use std::{f64, i32};
 
 use image::{Rgba, RgbaImage};
+use nalgebra::{Vector2, Vector3};
+
+pub use z_buffer::ZBuffer;
 
 pub fn line_slow(
     image: &mut RgbaImage,
@@ -81,36 +84,45 @@ pub fn line_fast(
 
 pub fn triangle(
     image: &mut RgbaImage,
+    z_buffer: &mut ZBuffer,
     color: Rgba<u8>,
-    a: Vector2<i32>,
-    b: Vector2<i32>,
-    c: Vector2<i32>,
+    a: Vector3<f64>,
+    b: Vector3<f64>,
+    c: Vector3<f64>,
 ) {
     fn bounding_box(
-        a: Vector2<i32>,
-        b: Vector2<i32>,
-        c: Vector2<i32>,
-    ) -> (Vector2<i32>, Vector2<i32>) {
-        let xmin = i32::min(i32::min(a.x, b.x), c.x);
-        let xmax = i32::max(i32::max(a.x, b.x), c.x);
-        let ymin = i32::min(i32::min(a.y, b.y), c.y);
-        let ymax = i32::max(i32::max(a.y, b.y), c.y);
-        (Vector2::new(xmin, ymin), Vector2::new(xmax, ymax))
+        a: Vector3<f64>,
+        b: Vector3<f64>,
+        c: Vector3<f64>,
+        width: u32,
+        height: u32,
+    ) -> (Vector2<u32>, Vector2<u32>) {
+        let xmin = f64::min(f64::min(a.x, b.x), c.x);
+        let xmax = f64::max(f64::max(a.x, b.x), c.x);
+        let ymin = f64::min(f64::min(a.y, b.y), c.y);
+        let ymax = f64::max(f64::max(a.y, b.y), c.y);
+        (
+            Vector2::new(xmin as u32, ymin as u32),
+            Vector2::new(
+                u32::min(xmax as u32, width - 1),
+                u32::min(ymax as u32, height - 1),
+            ),
+        )
     }
 
     fn barycentric(
-        a: Vector2<i32>,
-        b: Vector2<i32>,
-        c: Vector2<i32>,
-        p: Vector2<i32>,
-    ) -> Vector3<f32> {
+        a: Vector3<f64>,
+        b: Vector3<f64>,
+        c: Vector3<f64>,
+        p: Vector3<f64>,
+    ) -> Vector3<f64> {
         let ab = b - a;
         let ac = c - a;
         let pa = a - p;
-        let xs = Vector3::new(ac.x as f32, ab.x as f32, pa.x as f32);
-        let ys = Vector3::new(ac.y as f32, ab.y as f32, pa.y as f32);
+        let xs = Vector3::new(ac.x, ab.x, pa.x);
+        let ys = Vector3::new(ac.y, ab.y, pa.y);
         let ortho = xs.cross(&ys);
-        if f32::abs(ortho.z) < 1.0 {
+        if f64::abs(ortho.z) < 1.0 {
             Vector3::new(-1.0, -1.0, -1.0)
         } else {
             Vector3::new(
@@ -121,15 +133,20 @@ pub fn triangle(
         }
     }
 
-    let (topleft, bottomright) = bounding_box(a, b, c);
+    let (topleft, bottomright) =
+        bounding_box(a, b, c, image.width(), image.height());
     for x in topleft.x..=bottomright.x {
         for y in topleft.y..=bottomright.y {
-            let p = Vector2::new(x, y);
+            let p = Vector3::new(x as f64, y as f64, 0.0);
             let bc = barycentric(a, b, c, p);
             if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
                 continue;
             }
-            image.put_pixel(p.x as u32, p.y as u32, color);
+            let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
+            if z_buffer.get(x, y) < frag_depth {
+                z_buffer.set(x, y, frag_depth);
+                image.put_pixel(x, y, color);
+            }
         }
     }
 }
