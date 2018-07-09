@@ -16,11 +16,10 @@ pub fn line_slow(
     mut dst_x: i32,
     mut dst_y: i32,
 ) {
-    let mut transposed = false;
-    if (dst_x - src_x).abs() < (dst_y - src_y).abs() {
+    let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
+    if transposed {
         mem::swap(&mut src_x, &mut src_y);
         mem::swap(&mut dst_x, &mut dst_y);
-        transposed = true;
     }
 
     if src_x > dst_x {
@@ -47,11 +46,10 @@ pub fn line_fast(
     mut dst_x: i32,
     mut dst_y: i32,
 ) {
-    let mut transposed = false;
-    if (dst_x - src_x).abs() < (dst_y - src_y).abs() {
+    let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
+    if transposed {
         mem::swap(&mut src_x, &mut src_y);
         mem::swap(&mut dst_x, &mut dst_y);
-        transposed = true;
     }
 
     if src_x > dst_x {
@@ -111,11 +109,15 @@ pub fn triangle(
         let pa = a - p;
         let xs = Vector3::new(ac.x as f32, ab.x as f32, pa.x as f32);
         let ys = Vector3::new(ac.y as f32, ab.y as f32, pa.y as f32);
-        let u = xs.cross(&ys);
-        if f32::abs(u.z) < 1.0 {
+        let ortho = xs.cross(&ys);
+        if f32::abs(ortho.z) < 1.0 {
             Vector3::new(-1.0, -1.0, -1.0)
         } else {
-            Vector3::new(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z)
+            Vector3::new(
+                1.0 - (ortho.x + ortho.y) / ortho.z,
+                ortho.y / ortho.z,
+                ortho.x / ortho.z,
+            )
         }
     }
 
