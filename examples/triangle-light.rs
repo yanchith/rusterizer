@@ -1,17 +1,17 @@
+extern crate failure;
 extern crate image;
 extern crate nalgebra;
-extern crate wavefront_obj;
-extern crate failure;
 extern crate rusterizer;
+extern crate wavefront_obj;
 
 use std::env;
 use std::fs;
 use std::i32;
 
+use failure::Error;
 use image::{imageops, ImageBuffer, Rgba};
 use nalgebra::{Vector2, Vector3};
 use wavefront_obj::obj::{self, Object, Primitive};
-use failure::Error;
 
 use rusterizer::triangle;
 

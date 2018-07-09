@@ -1,11 +1,11 @@
-extern crate image;
 extern crate failure;
+extern crate image;
 extern crate rusterizer;
 
 use failure::Error;
 use image::{ImageBuffer, Rgba};
 
-use rusterizer::{line_slow, line_fast};
+use rusterizer::{line_fast, line_slow};
 
 fn black() -> Rgba<u8> {
     Rgba([0, 0, 0, 255])

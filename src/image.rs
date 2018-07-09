@@ -27,7 +27,11 @@ impl Color {
 
 impl fmt::Display for Color {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "[{:03},{:03},{:03},{:03}]", self.0, self.1, self.2, self.3)
+        write!(
+            f,
+            "[{:03},{:03},{:03},{:03}]",
+            self.0, self.1, self.2, self.3
+        )
     }
 }
 
@@ -73,4 +77,3 @@ impl fmt::Display for Image {
         Ok(())
     }
 }
-
