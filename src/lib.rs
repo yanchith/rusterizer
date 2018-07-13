@@ -34,12 +34,13 @@ fn bounding_box(
 }
 
 /// Computes barycentric coordinates of point P in triangle A, B, C.
+/// Returns None for degenerate triangles.
 fn barycentric(
     a: Vector3<f64>,
     b: Vector3<f64>,
     c: Vector3<f64>,
     p: Vector3<f64>,
-) -> Vector3<f64> {
+) -> Option<Vector3<f64>> {
     let ab = b - a;
     let ac = c - a;
     let pa = a - p;
@@ -47,13 +48,13 @@ fn barycentric(
     let ys = Vector3::new(ac.y, ab.y, pa.y);
     let ortho = xs.cross(&ys);
     if f64::abs(ortho.z) < 1.0 {
-        Vector3::new(-1.0, -1.0, -1.0)
+        None
     } else {
-        Vector3::new(
+        Some(Vector3::new(
             1.0 - (ortho.x + ortho.y) / ortho.z,
             ortho.y / ortho.z,
             ortho.x / ortho.z,
-        )
+        ))
     }
 }
 
@@ -128,14 +129,18 @@ pub fn triangle(
     for x in tl.x..=br.x {
         for y in tl.y..=br.y {
             let p = Vector3::new(x as f64, y as f64, 0.0);
-            let bc = barycentric(a, b, c, p);
-            if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
-                continue;
-            }
-            let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
-            if z_buffer.get(x, y) < frag_depth {
-                z_buffer.set(x, y, frag_depth);
-                image.put_pixel(x, y, *light_color);
+            match barycentric(a, b, c, p) {
+                Some(bc) => {
+                    if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+                        continue;
+                    }
+                    let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
+                    if z_buffer.get(x, y) < frag_depth {
+                        z_buffer.set(x, y, frag_depth);
+                        image.put_pixel(x, y, *light_color);
+                    }
+                }
+                None => continue,
             }
         }
     }
@@ -157,19 +162,27 @@ pub fn triangle_texture(
     for x in tl.x..=br.x {
         for y in tl.y..=br.y {
             let p = Vector3::new(x as f64, y as f64, 0.0);
-            let bc = barycentric(a, b, c, p);
-            if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
-                continue;
-            }
-            let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
-            if z_buffer.get(x, y) < frag_depth {
-                let tex_coords = uva * bc.x + uvb * bc.y + uvc * bc.z;
-                let tx = ((texture.width() - 1) as f64 * tex_coords.x) as u32;
-                let ty = ((texture.height() - 1) as f64 * tex_coords.y) as u32;
-                let tex_color = texture.get_pixel(tx, ty);
+            match barycentric(a, b, c, p) {
+                Some(bc) => {
+                    if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+                        continue;
+                    }
+                    let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
+                    if z_buffer.get(x, y) < frag_depth {
+                        let tc = uva * bc.x + uvb * bc.y + uvc * bc.z;
+                        let tx = ((texture.width() - 1) as f64 * tc.x) as u32;
+                        let ty = ((texture.height() - 1) as f64 * tc.y) as u32;
+                        let tex_color = texture.get_pixel(tx, ty);
 
-                z_buffer.set(x, y, frag_depth);
-                image.put_pixel(x, y, multiply_rgba(tex_color, light_color));
+                        z_buffer.set(x, y, frag_depth);
+                        image.put_pixel(
+                            x,
+                            y,
+                            multiply_rgba(tex_color, light_color),
+                        );
+                    }
+                }
+                None => continue,
             }
         }
     }
