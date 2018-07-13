@@ -11,6 +11,69 @@ use nalgebra::{Vector2, Vector3};
 
 pub use z_buffer::ZBuffer;
 
+/// Computes a bounding box (in screenspace pixels) for triangle A, B, C.
+/// Ignores Z dimensions.
+fn bounding_box(
+    a: Vector3<f64>,
+    b: Vector3<f64>,
+    c: Vector3<f64>,
+    width: u32,
+    height: u32,
+) -> (Vector2<u32>, Vector2<u32>) {
+    let xmin = f64::min(f64::min(a.x, b.x), c.x);
+    let xmax = f64::max(f64::max(a.x, b.x), c.x);
+    let ymin = f64::min(f64::min(a.y, b.y), c.y);
+    let ymax = f64::max(f64::max(a.y, b.y), c.y);
+    (
+        Vector2::new(xmin as u32, ymin as u32),
+        Vector2::new(
+            u32::min(xmax as u32, width - 1),
+            u32::min(ymax as u32, height - 1),
+        ),
+    )
+}
+
+/// Computes barycentric coordinates of point P in triangle A, B, C.
+fn barycentric(
+    a: Vector3<f64>,
+    b: Vector3<f64>,
+    c: Vector3<f64>,
+    p: Vector3<f64>,
+) -> Vector3<f64> {
+    let ab = b - a;
+    let ac = c - a;
+    let pa = a - p;
+    let xs = Vector3::new(ac.x, ab.x, pa.x);
+    let ys = Vector3::new(ac.y, ab.y, pa.y);
+    let ortho = xs.cross(&ys);
+    if f64::abs(ortho.z) < 1.0 {
+        Vector3::new(-1.0, -1.0, -1.0)
+    } else {
+        Vector3::new(
+            1.0 - (ortho.x + ortho.y) / ortho.z,
+            ortho.y / ortho.z,
+            ortho.x / ortho.z,
+        )
+    }
+}
+
+fn multiply_rgba(color1: &Rgba<u8>, color2: &Rgba<u8>) -> Rgba<u8> {
+    Rgba([
+        ((color1.data[0] as f32 / 255.0)
+            * (color2.data[0] as f32 / 255.0)
+            * 255.0) as u8,
+        ((color1.data[1] as f32 / 255.0)
+            * (color2.data[1] as f32 / 255.0)
+            * 255.0) as u8,
+        ((color1.data[2] as f32 / 255.0)
+            * (color2.data[2] as f32 / 255.0)
+            * 255.0) as u8,
+        ((color1.data[3] as f32 / 255.0)
+            * (color2.data[3] as f32 / 255.0)
+            * 255.0) as u8,
+    ])
+}
+
 pub fn line(
     image: &mut RgbaImage,
     color: Rgba<u8>,
@@ -56,57 +119,11 @@ pub fn line(
 pub fn triangle(
     image: &mut RgbaImage,
     z_buffer: &mut ZBuffer,
-    color: Rgba<u8>,
+    light_color: &Rgba<u8>,
     a: Vector3<f64>,
     b: Vector3<f64>,
     c: Vector3<f64>,
 ) {
-    /// Computes a bounding box (in screenspace pixels) for triangle A, B, C.
-    /// Ignores Z dimensions.
-    fn bounding_box(
-        a: Vector3<f64>,
-        b: Vector3<f64>,
-        c: Vector3<f64>,
-        width: u32,
-        height: u32,
-    ) -> (Vector2<u32>, Vector2<u32>) {
-        let xmin = f64::min(f64::min(a.x, b.x), c.x);
-        let xmax = f64::max(f64::max(a.x, b.x), c.x);
-        let ymin = f64::min(f64::min(a.y, b.y), c.y);
-        let ymax = f64::max(f64::max(a.y, b.y), c.y);
-        (
-            Vector2::new(xmin as u32, ymin as u32),
-            Vector2::new(
-                u32::min(xmax as u32, width - 1),
-                u32::min(ymax as u32, height - 1),
-            ),
-        )
-    }
-
-    /// Computes barycentric coordinates of point P in triangle A, B, C.
-    fn barycentric(
-        a: Vector3<f64>,
-        b: Vector3<f64>,
-        c: Vector3<f64>,
-        p: Vector3<f64>,
-    ) -> Vector3<f64> {
-        let ab = b - a;
-        let ac = c - a;
-        let pa = a - p;
-        let xs = Vector3::new(ac.x, ab.x, pa.x);
-        let ys = Vector3::new(ac.y, ab.y, pa.y);
-        let ortho = xs.cross(&ys);
-        if f64::abs(ortho.z) < 1.0 {
-            Vector3::new(-1.0, -1.0, -1.0)
-        } else {
-            Vector3::new(
-                1.0 - (ortho.x + ortho.y) / ortho.z,
-                ortho.y / ortho.z,
-                ortho.x / ortho.z,
-            )
-        }
-    }
-
     let (tl, br) = bounding_box(a, b, c, image.width(), image.height());
     for x in tl.x..=br.x {
         for y in tl.y..=br.y {
@@ -118,7 +135,41 @@ pub fn triangle(
             let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
             if z_buffer.get(x, y) < frag_depth {
                 z_buffer.set(x, y, frag_depth);
-                image.put_pixel(x, y, color);
+                image.put_pixel(x, y, *light_color);
+            }
+        }
+    }
+}
+
+pub fn triangle_texture(
+    image: &mut RgbaImage,
+    z_buffer: &mut ZBuffer,
+    light_color: &Rgba<u8>,
+    a: Vector3<f64>,
+    b: Vector3<f64>,
+    c: Vector3<f64>,
+    uva: Vector2<f64>,
+    uvb: Vector2<f64>,
+    uvc: Vector2<f64>,
+    texture: &RgbaImage,
+) {
+    let (tl, br) = bounding_box(a, b, c, image.width(), image.height());
+    for x in tl.x..=br.x {
+        for y in tl.y..=br.y {
+            let p = Vector3::new(x as f64, y as f64, 0.0);
+            let bc = barycentric(a, b, c, p);
+            if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+                continue;
+            }
+            let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
+            if z_buffer.get(x, y) < frag_depth {
+                let tex_coords = uva * bc.x + uvb * bc.y + uvc * bc.z;
+                let tx = ((texture.width() - 1) as f64 * tex_coords.x) as u32;
+                let ty = ((texture.height() - 1) as f64 * tex_coords.y) as u32;
+                let tex_color = texture.get_pixel(tx, ty);
+
+                z_buffer.set(x, y, frag_depth);
+                image.put_pixel(x, y, multiply_rgba(tex_color, light_color));
             }
         }
     }
