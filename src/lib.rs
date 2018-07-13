@@ -11,37 +11,7 @@ use nalgebra::{Vector2, Vector3};
 
 pub use z_buffer::ZBuffer;
 
-pub fn line_slow(
-    image: &mut RgbaImage,
-    color: Rgba<u8>,
-    mut src_x: i32,
-    mut src_y: i32,
-    mut dst_x: i32,
-    mut dst_y: i32,
-) {
-    let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
-    if transposed {
-        mem::swap(&mut src_x, &mut src_y);
-        mem::swap(&mut dst_x, &mut dst_y);
-    }
-
-    if src_x > dst_x {
-        mem::swap(&mut src_x, &mut dst_x);
-        mem::swap(&mut src_y, &mut dst_y);
-    }
-
-    for x in src_x..=dst_x {
-        let t = (x - src_x) as f32 / (dst_x - src_x) as f32;
-        let y = src_y as f32 * (1.0 - t) + dst_y as f32 * t;
-        if transposed {
-            image.put_pixel(y as u32, x as u32, color);
-        } else {
-            image.put_pixel(x as u32, y as u32, color);
-        }
-    }
-}
-
-pub fn line_fast(
+pub fn line(
     image: &mut RgbaImage,
     color: Rgba<u8>,
     mut src_x: i32,
@@ -82,6 +52,7 @@ pub fn line_fast(
     }
 }
 
+/// Writes a triangle to image and z_buffer.
 pub fn triangle(
     image: &mut RgbaImage,
     z_buffer: &mut ZBuffer,
@@ -90,6 +61,8 @@ pub fn triangle(
     b: Vector3<f64>,
     c: Vector3<f64>,
 ) {
+    /// Computes a bounding box (in screenspace pixels) for triangle A, B, C.
+    /// Ignores Z dimensions.
     fn bounding_box(
         a: Vector3<f64>,
         b: Vector3<f64>,
@@ -110,6 +83,7 @@ pub fn triangle(
         )
     }
 
+    /// Computes barycentric coordinates of point P in triangle A, B, C.
     fn barycentric(
         a: Vector3<f64>,
         b: Vector3<f64>,
@@ -133,10 +107,9 @@ pub fn triangle(
         }
     }
 
-    let (topleft, bottomright) =
-        bounding_box(a, b, c, image.width(), image.height());
-    for x in topleft.x..=bottomright.x {
-        for y in topleft.y..=bottomright.y {
+    let (tl, br) = bounding_box(a, b, c, image.width(), image.height());
+    for x in tl.x..=br.x {
+        for y in tl.y..=br.y {
             let p = Vector3::new(x as f64, y as f64, 0.0);
             let bc = barycentric(a, b, c, p);
             if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {

@@ -11,7 +11,7 @@ use failure::Error;
 use image::{imageops, ImageBuffer, Rgba};
 use wavefront_obj::obj::{self, Object, Primitive};
 
-use rusterizer::line_fast as line;
+use rusterizer::line;
 
 fn black() -> Rgba<u8> {
     Rgba([0, 0, 0, 255])
