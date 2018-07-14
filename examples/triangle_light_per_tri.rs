@@ -115,8 +115,9 @@ fn main() -> Result<(), Error> {
             Luma([(depth * 255.0) as u8])
         });
 
-    imageops::flip_vertical(&image).save("./triangle_goraud.png")?;
-    imageops::flip_vertical(&z_buffer_image).save("./triangle_goraud-depth.png")?;
+    imageops::flip_vertical(&image).save("./triangle_light_per_pixel.png")?;
+    imageops::flip_vertical(&z_buffer_image)
+        .save("./triangle_light_per_pixel-depth.png")?;
 
     Ok(())
 }
