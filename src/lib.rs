@@ -4,7 +4,7 @@ extern crate nalgebra;
 mod z_buffer;
 
 use std::mem;
-use std::{f64, i32};
+use std::{f32, f64, i32};
 
 use image::{Rgba, RgbaImage};
 use nalgebra::{Vector2, Vector3};
@@ -58,19 +58,19 @@ fn barycentric(
     }
 }
 
-fn multiply_rgba(color1: &Rgba<u8>, color2: &Rgba<u8>) -> Rgba<u8> {
+fn multiply_rgba(color1: Rgba<u8>, color2: Rgba<u8>) -> Rgba<u8> {
     Rgba([
-        ((color1.data[0] as f32 / 255.0)
-            * (color2.data[0] as f32 / 255.0)
+        ((f32::from(color1.data[0]) / 255.0)
+            * (f32::from(color2.data[0]) / 255.0)
             * 255.0) as u8,
-        ((color1.data[1] as f32 / 255.0)
-            * (color2.data[1] as f32 / 255.0)
+        ((f32::from(color1.data[1]) / 255.0)
+            * (f32::from(color2.data[1]) / 255.0)
             * 255.0) as u8,
-        ((color1.data[2] as f32 / 255.0)
-            * (color2.data[2] as f32 / 255.0)
+        ((f32::from(color1.data[2]) / 255.0)
+            * (f32::from(color2.data[2]) / 255.0)
             * 255.0) as u8,
-        ((color1.data[3] as f32 / 255.0)
-            * (color2.data[3] as f32 / 255.0)
+        ((f32::from(color1.data[3]) / 255.0)
+            * (f32::from(color2.data[3]) / 255.0)
             * 255.0) as u8,
     ])
 }
@@ -120,7 +120,7 @@ pub fn line(
 pub fn triangle(
     image: &mut RgbaImage,
     z_buffer: &mut ZBuffer,
-    light_color: &Rgba<u8>,
+    light_color: Rgba<u8>,
     a: Vector3<f64>,
     b: Vector3<f64>,
     c: Vector3<f64>,
@@ -128,7 +128,7 @@ pub fn triangle(
     let (tl, br) = bounding_box(a, b, c, image.width(), image.height());
     for x in tl.x..=br.x {
         for y in tl.y..=br.y {
-            let p = Vector3::new(x as f64, y as f64, 0.0);
+            let p = Vector3::new(f64::from(x), f64::from(y), 0.0);
             match barycentric(a, b, c, p) {
                 Some(bc) => {
                     if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
@@ -137,7 +137,7 @@ pub fn triangle(
                     let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
                     if z_buffer.get(x, y) < frag_depth {
                         z_buffer.set(x, y, frag_depth);
-                        image.put_pixel(x, y, *light_color);
+                        image.put_pixel(x, y, light_color);
                     }
                 }
                 None => continue,
@@ -149,7 +149,7 @@ pub fn triangle(
 pub fn triangle_texture(
     image: &mut RgbaImage,
     z_buffer: &mut ZBuffer,
-    light_color: &Rgba<u8>,
+    light_color: Rgba<u8>,
     a: Vector3<f64>,
     b: Vector3<f64>,
     c: Vector3<f64>,
@@ -161,7 +161,7 @@ pub fn triangle_texture(
     let (tl, br) = bounding_box(a, b, c, image.width(), image.height());
     for x in tl.x..=br.x {
         for y in tl.y..=br.y {
-            let p = Vector3::new(x as f64, y as f64, 0.0);
+            let p = Vector3::new(f64::from(x), f64::from(y), 0.0);
             match barycentric(a, b, c, p) {
                 Some(bc) => {
                     if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
@@ -170,9 +170,10 @@ pub fn triangle_texture(
                     let frag_depth = a.z * bc.x + b.z * bc.y + c.z * bc.z;
                     if z_buffer.get(x, y) < frag_depth {
                         let tc = uva * bc.x + uvb * bc.y + uvc * bc.z;
-                        let tx = ((texture.width() - 1) as f64 * tc.x) as u32;
-                        let ty = ((texture.height() - 1) as f64 * tc.y) as u32;
-                        let tex_color = texture.get_pixel(tx, ty);
+                        let tx = (f64::from(texture.width() - 1) * tc.x) as u32;
+                        let ty =
+                            (f64::from(texture.height() - 1) * tc.y) as u32;
+                        let tex_color = *texture.get_pixel(tx, ty);
 
                         z_buffer.set(x, y, frag_depth);
                         image.put_pixel(

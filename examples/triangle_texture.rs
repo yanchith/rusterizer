@@ -115,7 +115,7 @@ fn main() -> Result<(), Error> {
                             triangle_texture(
                                 &mut image,
                                 &mut z_buffer,
-                                &luma(light_intensity),
+                                luma(light_intensity),
                                 screen_a,
                                 screen_b,
                                 screen_c,

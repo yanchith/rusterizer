@@ -96,7 +96,7 @@ fn main() -> Result<(), Error> {
                             triangle(
                                 &mut image,
                                 &mut z_buffer,
-                                &luma(light_intensity),
+                                luma(light_intensity),
                                 screen_a,
                                 screen_b,
                                 screen_c,
@@ -115,9 +115,9 @@ fn main() -> Result<(), Error> {
             Luma([(depth * 255.0) as u8])
         });
 
-    imageops::flip_vertical(&image).save("./triangle_light_per_pixel.png")?;
+    imageops::flip_vertical(&image).save("./triangle_light_per_tri.png")?;
     imageops::flip_vertical(&z_buffer_image)
-        .save("./triangle_light_per_pixel-depth.png")?;
+        .save("./triangle_light_per_tri-depth.png")?;
 
     Ok(())
 }
