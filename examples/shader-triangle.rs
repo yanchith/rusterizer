@@ -25,21 +25,7 @@ struct Attribute {
     pos: Vector4<f64>,
 }
 
-impl Default for Attribute {
-    fn default() -> Attribute {
-        Attribute {
-            pos: Vector4::zeros(),
-        }
-    }
-}
-
 struct SimpleShader;
-
-impl SimpleShader {
-    pub fn new() -> SimpleShader {
-        SimpleShader
-    }
-}
 
 impl Shader for SimpleShader {
     type Attribute = Attribute;
@@ -80,8 +66,7 @@ fn main() -> Result<(), Error> {
         },
     ];
 
-    let shader = SimpleShader::new();
-    let pipeline = Pipeline::new(shader);
+    let pipeline = Pipeline::new(SimpleShader);
 
     pipeline.run(&attributes, &mut image, &mut z_buffer);
 

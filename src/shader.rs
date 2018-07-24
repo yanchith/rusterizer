@@ -5,7 +5,7 @@ pub trait Smooth: Copy + Clone {
 }
 
 pub trait Shader {
-    type Attribute: Default;
+    type Attribute;
     type Varying: Default + Smooth;
     // type Fragment: Default;
 
