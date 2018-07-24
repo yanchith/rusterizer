@@ -43,10 +43,8 @@ impl Shader for SimpleShader {
         &self,
         _pos: &Vector4<f64>,
         _var: &Self::Varying,
-        frag: &mut Vector4<f64>,
-    ) -> bool {
-        *frag = Vector4::new(1.0, 0.0, 0.0, 1.0);
-        false
+    ) -> Vector4<f64> {
+        Vector4::new(1.0, 0.0, 0.0, 1.0)
     }
 }
 

@@ -1,12 +1,12 @@
 use std::f64;
 
 use image::{Rgba, RgbaImage};
-use nalgebra::{U3, Vector2, Vector3, Vector4};
+use nalgebra::{U2, Vector2, Vector3, Vector4};
 
 use shader::{Shader, Smooth};
 use z_buffer::ZBuffer;
 
-pub struct Pipeline<S> {
+pub struct Pipeline<S: Shader> {
     shader: S,
 }
 
@@ -23,30 +23,30 @@ impl<S: Shader> Pipeline<S> {
     ) {
         let width = framebuffer.width();
         let height = framebuffer.height();
-        let half_width = (width / 2) as f64;
-        let half_height = (height / 2) as f64;
+        let half_width = f64::from(width / 2);
+        let half_height = f64::from(height / 2);
 
         let len_div_3 = buffer.len() / 3;
         for i in 0..len_div_3 {
             let attr = i * 3;
-            let mut vara = S::Varying::default();
-            let mut varb = S::Varying::default();
-            let mut varc = S::Varying::default();
-            let world_a = self.shader.vertex(&buffer[attr], &mut vara);
-            let world_b = self.shader.vertex(&buffer[attr + 1], &mut varb);
-            let world_c = self.shader.vertex(&buffer[attr + 2], &mut varc);
+
+            let mut va = S::Varying::default();
+            let mut vb = S::Varying::default();
+            let mut vc = S::Varying::default();
+
+            let world_a = self.shader.vertex(&buffer[attr], &mut va);
+            let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
+            let world_c = self.shader.vertex(&buffer[attr + 2], &mut vc);
+
             let screen_a = world_to_screen(world_a, half_width, half_height);
             let screen_b = world_to_screen(world_b, half_width, half_height);
             let screen_c = world_to_screen(world_c, half_width, half_height);
+
             self.triangle(
                 framebuffer,
                 z_buffer,
-                screen_a,
-                screen_b,
-                screen_c,
-                vara,
-                varb,
-                varc,
+                (screen_a, screen_b, screen_c),
+                (va, vb, vc),
             );
         }
     }
@@ -56,62 +56,46 @@ impl<S: Shader> Pipeline<S> {
         &self,
         image_color: &mut RgbaImage,
         image_depth: &mut ZBuffer,
-        a: Vector4<f64>,
-        b: Vector4<f64>,
-        c: Vector4<f64>,
-        vara: S::Varying,
-        varb: S::Varying,
-        varc: S::Varying,
+        (a, b, c): (Vector4<f64>, Vector4<f64>, Vector4<f64>),
+        (va, vb, vc): (S::Varying, S::Varying, S::Varying),
     ) {
-        let (tl, br) =
-            bounding_box(a, b, c, image_color.width(), image_color.height());
-        for x in tl.x..=br.x {
-            for y in tl.y..=br.y {
-                let p = Vector3::new(f64::from(x), f64::from(y), 0.0);
-                match barycentric(
-                    a.fixed_rows::<U3>(0).clone_owned(),
-                    b.fixed_rows::<U3>(0).clone_owned(),
-                    c.fixed_rows::<U3>(0).clone_owned(),
-                    p,
-                ) {
-                    Some(bar) => {
-                        if bar.x < 0.0 || bar.y < 0.0 || bar.z < 0.0 {
-                            continue;
-                        }
-                        let frag_pos = Vector4::interpolate(a, b, c, bar);
-                        let var =
-                            S::Varying::interpolate(vara, varb, varc, bar);
-                        if image_depth.get(x, y) < frag_pos.z {
-                            let mut frag_color =
-                                Vector4::new(0.0, 0.0, 0.0, 0.0);
-                            let discard = self.shader.fragment(
-                                &frag_pos,
-                                &var,
-                                &mut frag_color,
-                            );
-                            if !discard {
-                                image_depth.set(x, y, frag_pos.z);
-                                image_color.put_pixel(
-                                    x,
-                                    y,
-                                    color_vec_to_rgba(frag_color),
-                                );
-                            }
-                        }
+        let width = image_color.width();
+        let height = image_color.height();
+
+        // TODO: don't clone, use VectorSlice2
+        let a2 = a.fixed_rows::<U2>(0).clone_owned();
+        let b2 = b.fixed_rows::<U2>(0).clone_owned();
+        let c2 = c.fixed_rows::<U2>(0).clone_owned();
+
+        let (topleft, bottomright) = bounding_box(a2, b2, c2, width, height);
+
+        for x in topleft.x..=bottomright.x {
+            for y in topleft.y..=bottomright.y {
+                let point = Vector2::new(f64::from(x), f64::from(y));
+                if let Some(bc) = barycentric(a2, b2, c2, point) {
+                    if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+                        continue;
                     }
-                    None => continue,
+
+                    let f_pos = Vector4::interpolate(a, b, c, bc);
+                    let f_var = S::Varying::interpolate(va, vb, vc, bc);
+
+                    if image_depth.get(x, y) < f_pos.z {
+                        let f_color = self.shader.fragment(&f_pos, &f_var);
+                        image_depth.set(x, y, f_pos.z);
+                        image_color.put_pixel(x, y, color_vec_to_rgba(f_color));
+                    }
                 }
             }
         }
     }
 }
 
-/// Computes a bounding box (in screenspace pixels) for triangle A, B, C.
-/// Ignores Z dimensions.
+/// Computes a bounding box (in screenspace coords) for triangle A, B, C.
 fn bounding_box(
-    a: Vector4<f64>,
-    b: Vector4<f64>,
-    c: Vector4<f64>,
+    a: Vector2<f64>,
+    b: Vector2<f64>,
+    c: Vector2<f64>,
     width: u32,
     height: u32,
 ) -> (Vector2<u32>, Vector2<u32>) {
@@ -131,10 +115,10 @@ fn bounding_box(
 /// Computes barycentric coordinates of point P in triangle A, B, C.
 /// Returns None for degenerate triangles.
 fn barycentric(
-    a: Vector3<f64>,
-    b: Vector3<f64>,
-    c: Vector3<f64>,
-    p: Vector3<f64>,
+    a: Vector2<f64>,
+    b: Vector2<f64>,
+    c: Vector2<f64>,
+    p: Vector2<f64>,
 ) -> Option<Vector3<f64>> {
     let ab = b - a;
     let ac = c - a;
