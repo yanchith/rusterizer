@@ -1,10 +1,9 @@
-use std::mem;
-use std::{f32, f64, i32};
+use std::f64;
 
 use image::{Rgba, RgbaImage};
 use nalgebra::{U3, Vector2, Vector3, Vector4};
 
-use shader::Shader;
+use shader::{Shader, Smooth};
 use z_buffer::ZBuffer;
 
 pub struct Pipeline<S> {
@@ -18,21 +17,37 @@ impl<S: Shader> Pipeline<S> {
 
     pub fn run(
         &self,
-        viewport: [u32; 2],
         buffer: &[S::Attribute],
         framebuffer: &mut RgbaImage,
         z_buffer: &mut ZBuffer,
     ) {
+        let width = framebuffer.width();
+        let height = framebuffer.height();
+        let half_width = (width / 2) as f64;
+        let half_height = (height / 2) as f64;
+
         let len_div_3 = buffer.len() / 3;
         for i in 0..len_div_3 {
             let attr = i * 3;
-            let a = self.shader
-                .vertex(&buffer[attr], &mut S::Varying::default());
-            let b = self.shader
-                .vertex(&buffer[attr + 1], &mut S::Varying::default());
-            let c = self.shader
-                .vertex(&buffer[attr + 2], &mut S::Varying::default());
-            self.triangle(framebuffer, z_buffer, a, b, c);
+            let mut vara = S::Varying::default();
+            let mut varb = S::Varying::default();
+            let mut varc = S::Varying::default();
+            let world_a = self.shader.vertex(&buffer[attr], &mut vara);
+            let world_b = self.shader.vertex(&buffer[attr + 1], &mut varb);
+            let world_c = self.shader.vertex(&buffer[attr + 2], &mut varc);
+            let screen_a = world_to_screen(world_a, half_width, half_height);
+            let screen_b = world_to_screen(world_b, half_width, half_height);
+            let screen_c = world_to_screen(world_c, half_width, half_height);
+            self.triangle(
+                framebuffer,
+                z_buffer,
+                screen_a,
+                screen_b,
+                screen_c,
+                vara,
+                varb,
+                varc,
+            );
         }
     }
 
@@ -44,6 +59,9 @@ impl<S: Shader> Pipeline<S> {
         a: Vector4<f64>,
         b: Vector4<f64>,
         c: Vector4<f64>,
+        vara: S::Varying,
+        varb: S::Varying,
+        varc: S::Varying,
     ) {
         let (tl, br) =
             bounding_box(a, b, c, image_color.width(), image_color.height());
@@ -56,25 +74,29 @@ impl<S: Shader> Pipeline<S> {
                     c.fixed_rows::<U3>(0).clone_owned(),
                     p,
                 ) {
-                    Some(bc) => {
-                        if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+                    Some(bar) => {
+                        if bar.x < 0.0 || bar.y < 0.0 || bar.z < 0.0 {
                             continue;
                         }
-                        let frag_pos = Vector3::new(
-                            a.x * bc.x + b.x * bc.y + c.x * bc.z,
-                            a.y * bc.x + b.y * bc.y + c.y * bc.z,
-                            a.z * bc.x + b.z * bc.y + c.z * bc.z,
-                        );
+                        let frag_pos = Vector4::interpolate(a, b, c, bar);
+                        let var =
+                            S::Varying::interpolate(vara, varb, varc, bar);
                         if image_depth.get(x, y) < frag_pos.z {
-                            let mut frag_color = Rgba([0, 0, 0, 0]);
-                            self.shader.fragment(
+                            let mut frag_color =
+                                Vector4::new(0.0, 0.0, 0.0, 0.0);
+                            let discard = self.shader.fragment(
                                 &frag_pos,
-                                &S::Varying::default(),
+                                &var,
                                 &mut frag_color,
                             );
-                            image_depth.set(x, y, frag_pos.z);
-
-                            image_color.put_pixel(x, y, frag_color);
+                            if !discard {
+                                image_depth.set(x, y, frag_pos.z);
+                                image_color.put_pixel(
+                                    x,
+                                    y,
+                                    color_vec_to_rgba(frag_color),
+                                );
+                            }
                         }
                     }
                     None => continue,
@@ -131,60 +153,25 @@ fn barycentric(
     }
 }
 
-fn multiply_rgba(color1: Rgba<u8>, color2: Rgba<u8>) -> Rgba<u8> {
+fn color_vec_to_rgba(color: Vector4<f64>) -> Rgba<u8> {
+    let remapped = color * 255.0;
     Rgba([
-        ((f32::from(color1.data[0]) / 255.0)
-            * (f32::from(color2.data[0]) / 255.0)
-            * 255.0) as u8,
-        ((f32::from(color1.data[1]) / 255.0)
-            * (f32::from(color2.data[1]) / 255.0)
-            * 255.0) as u8,
-        ((f32::from(color1.data[2]) / 255.0)
-            * (f32::from(color2.data[2]) / 255.0)
-            * 255.0) as u8,
-        ((f32::from(color1.data[3]) / 255.0)
-            * (f32::from(color2.data[3]) / 255.0)
-            * 255.0) as u8,
+        remapped.x as u8,
+        remapped.y as u8,
+        remapped.z as u8,
+        remapped.w as u8,
     ])
 }
 
-pub fn line(
-    image: &mut RgbaImage,
-    color: Rgba<u8>,
-    mut src_x: i32,
-    mut src_y: i32,
-    mut dst_x: i32,
-    mut dst_y: i32,
-) {
-    let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
-    if transposed {
-        mem::swap(&mut src_x, &mut src_y);
-        mem::swap(&mut dst_x, &mut dst_y);
-    }
-
-    if src_x > dst_x {
-        mem::swap(&mut src_x, &mut dst_x);
-        mem::swap(&mut src_y, &mut dst_y);
-    }
-
-    let dx = dst_x - src_x;
-    let dy = dst_y - src_y;
-
-    let derror2 = i32::abs(dy) * 2;
-    let mut error2 = 0;
-
-    let mut y = src_y;
-    for x in src_x..=dst_x {
-        if transposed {
-            image.put_pixel(y as u32, x as u32, color);
-        } else {
-            image.put_pixel(x as u32, y as u32, color);
-        }
-
-        error2 += derror2;
-        if error2 > dx {
-            y += if src_y > dst_y { -1 } else { 1 };
-            error2 -= dx * 2;
-        }
-    }
+fn world_to_screen(
+    world_coords: Vector4<f64>,
+    half_width: f64,
+    half_height: f64,
+) -> Vector4<f64> {
+    Vector4::new(
+        (world_coords.x + 1.0) * half_width,
+        (world_coords.y + 1.0) * half_height,
+        world_coords.z,
+        world_coords.w,
+    )
 }
