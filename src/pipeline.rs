@@ -1,4 +1,4 @@
-use std::f64;
+use std::{f64, mem};
 
 use image::{Rgba, RgbaImage};
 use nalgebra::{U2, Vector2, Vector3, Vector4};
@@ -15,19 +15,18 @@ impl<S: Shader> Pipeline<S> {
         Pipeline { shader }
     }
 
-    pub fn run(
+    pub fn triangles(
         &self,
         buffer: &[S::Attribute],
-        framebuffer: &mut RgbaImage,
-        z_buffer: &mut ZBuffer,
+        image_color: &mut RgbaImage,
+        image_depth: &mut ZBuffer,
     ) {
-        let width = framebuffer.width();
-        let height = framebuffer.height();
+        let width = image_color.width();
+        let height = image_color.height();
         let half_width = f64::from(width / 2);
         let half_height = f64::from(height / 2);
 
-        let len_div_3 = buffer.len() / 3;
-        for i in 0..len_div_3 {
+        for i in 0..buffer.len() / 3 {
             let attr = i * 3;
 
             let mut va = S::Varying::default();
@@ -43,10 +42,40 @@ impl<S: Shader> Pipeline<S> {
             let screen_c = world_to_screen(world_c, half_width, half_height);
 
             self.triangle(
-                framebuffer,
-                z_buffer,
+                image_color,
+                image_depth,
                 (screen_a, screen_b, screen_c),
                 (va, vb, vc),
+            );
+        }
+    }
+
+    pub fn lines(&self, buffer: &[S::Attribute], image_color: &mut RgbaImage) {
+        let width = image_color.width();
+        let height = image_color.height();
+        let half_width = f64::from(width / 2);
+        let half_height = f64::from(height / 2);
+
+        for i in 0..buffer.len() / 2 {
+            let attr = i * 2;
+
+            let mut va = S::Varying::default();
+            let mut vb = S::Varying::default();
+
+            let world_a = self.shader.vertex(&buffer[attr], &mut va);
+            let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
+
+            let screen_a = world_to_screen(world_a, half_width, half_height);
+            let screen_b = world_to_screen(world_b, half_width, half_height);
+
+            line(
+                image_color,
+                // TODO: interpolate color
+                Rgba([255, 255, 255, 255]),
+                screen_a.x as i32,
+                screen_a.y as i32,
+                screen_b.x as i32,
+                screen_b.y as i32,
             );
         }
     }
@@ -134,6 +163,48 @@ fn barycentric(
             ortho.y / ortho.z,
             ortho.x / ortho.z,
         ))
+    }
+}
+
+/// Draw a line from src to dst using Bresenham's Algorithm
+fn line(
+    image: &mut RgbaImage,
+    color: Rgba<u8>,
+    mut src_x: i32,
+    mut src_y: i32,
+    mut dst_x: i32,
+    mut dst_y: i32,
+) {
+    let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
+    if transposed {
+        mem::swap(&mut src_x, &mut src_y);
+        mem::swap(&mut dst_x, &mut dst_y);
+    }
+
+    if src_x > dst_x {
+        mem::swap(&mut src_x, &mut dst_x);
+        mem::swap(&mut src_y, &mut dst_y);
+    }
+
+    let dx = dst_x - src_x;
+    let dy = dst_y - src_y;
+
+    let derror2 = i32::abs(dy) * 2;
+    let mut error2 = 0;
+
+    let mut y = src_y;
+    for x in src_x..=dst_x {
+        if transposed {
+            image.put_pixel(y as u32, x as u32, color);
+        } else {
+            image.put_pixel(x as u32, y as u32, color);
+        }
+
+        error2 += derror2;
+        if error2 > dx {
+            y += if src_y > dst_y { -1 } else { 1 };
+            error2 -= dx * 2;
+        }
     }
 }
 

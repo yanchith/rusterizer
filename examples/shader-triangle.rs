@@ -66,7 +66,7 @@ fn main() -> Result<(), Error> {
 
     let pipeline = Pipeline::new(SimpleShader);
 
-    pipeline.run(&attributes, &mut image, &mut z_buffer);
+    pipeline.triangles(&attributes, &mut image, &mut z_buffer);
 
     imageops::flip_vertical(&image).save("./shader-triangle.png")?;
 
