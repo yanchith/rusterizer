@@ -47,7 +47,7 @@ impl Smooth for Varying {
         bc: Vector3<f64>,
     ) -> Varying {
         Varying {
-            clr: Vector4::<f64>::interpolate(a.clr, b.clr, c.clr, bc),
+            clr: Vector4::interpolate(a.clr, b.clr, c.clr, bc),
         }
     }
 }
