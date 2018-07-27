@@ -7,10 +7,10 @@ use std::f64;
 
 use failure::Error;
 use image::{imageops, ImageBuffer, Rgba};
-use nalgebra::Vector4;
+use nalgebra::{Vector3, Vector4};
 
 use rusterizer::pipeline::Pipeline;
-use rusterizer::shader::Shader;
+use rusterizer::shader::{ShaderProgram, Smooth};
 use rusterizer::ZBuffer;
 
 const WIDTH: u32 = 800;
@@ -22,29 +22,57 @@ fn black() -> Rgba<u8> {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Attribute {
-    pos: Vector4<f64>,
+    pub pos: Vector4<f64>,
+    pub clr: Vector4<f64>,
 }
 
-struct SimpleShader;
+#[derive(Debug, PartialEq, Clone, Copy)]
+struct Varying {
+    pub clr: Vector4<f64>,
+}
 
-impl Shader for SimpleShader {
+impl Default for Varying {
+    fn default() -> Varying {
+        Varying {
+            clr: Vector4::zeros(),
+        }
+    }
+}
+
+impl Smooth for Varying {
+    fn interpolate(
+        a: Varying,
+        b: Varying,
+        c: Varying,
+        bc: Vector3<f64>,
+    ) -> Varying {
+        Varying {
+            clr: Vector4::<f64>::interpolate(a.clr, b.clr, c.clr, bc),
+        }
+    }
+}
+
+struct SimpleProgram;
+
+impl ShaderProgram for SimpleProgram {
     type Attribute = Attribute;
-    type Varying = ();
+    type Varying = Varying;
 
     fn vertex(
         &self,
         attr: &Self::Attribute,
-        _var: &mut Self::Varying,
+        var: &mut Self::Varying,
     ) -> Vector4<f64> {
+        var.clr = attr.clr;
         attr.pos
     }
 
     fn fragment(
         &self,
         _pos: &Vector4<f64>,
-        _var: &Self::Varying,
+        var: &Self::Varying,
     ) -> Vector4<f64> {
-        Vector4::new(1.0, 0.0, 0.0, 1.0)
+        var.clr
     }
 }
 
@@ -55,20 +83,23 @@ fn main() -> Result<(), Error> {
     let attributes = vec![
         Attribute {
             pos: Vector4::new(-1.0, 0.0, 0.0, 1.0),
+            clr: Vector4::new(1.0, 0.0, 0.0, 1.0),
         },
         Attribute {
             pos: Vector4::new(0.0, 1.0, 0.0, 1.0),
+            clr: Vector4::new(0.0, 1.0, 0.0, 1.0),
         },
         Attribute {
             pos: Vector4::new(1.0, -1.0, 0.0, 1.0),
+            clr: Vector4::new(0.0, 0.0, 1.0, 1.0),
         },
     ];
 
-    let pipeline = Pipeline::new(SimpleShader);
+    let pipeline = Pipeline::new(SimpleProgram);
 
     pipeline.triangles(&attributes, &mut image, &mut z_buffer);
 
-    imageops::flip_vertical(&image).save("./shader-triangle.png")?;
+    imageops::flip_vertical(&image).save("./shader_triangle.png")?;
 
     Ok(())
 }

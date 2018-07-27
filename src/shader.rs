@@ -1,10 +1,10 @@
 use nalgebra::{Vector2, Vector3, Vector4};
 
 pub trait Smooth: Copy + Clone {
-    fn interpolate(a: Self, b: Self, c: Self, bar: Vector3<f64>) -> Self;
+    fn interpolate(a: Self, b: Self, c: Self, bc: Vector3<f64>) -> Self;
 }
 
-pub trait Shader {
+pub trait ShaderProgram {
     type Attribute;
     type Varying: Default + Smooth;
     // type Fragment: Default;

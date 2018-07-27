@@ -3,14 +3,14 @@ use std::{f64, mem};
 use image::{Rgba, RgbaImage};
 use nalgebra::{U2, Vector2, Vector3, Vector4};
 
-use shader::{Shader, Smooth};
+use shader::{ShaderProgram, Smooth};
 use z_buffer::ZBuffer;
 
-pub struct Pipeline<S: Shader> {
+pub struct Pipeline<S: ShaderProgram> {
     shader: S,
 }
 
-impl<S: Shader> Pipeline<S> {
+impl<S: ShaderProgram> Pipeline<S> {
     pub fn new(shader: S) -> Self {
         Pipeline { shader }
     }

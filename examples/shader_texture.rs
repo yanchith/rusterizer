@@ -5,15 +5,16 @@ extern crate rusterizer;
 extern crate wavefront_obj;
 
 use std::env;
-use std::fs;
+use std::fs::{self, File};
+use std::io::BufReader;
 use std::{f64, i32};
 
 use failure::Error;
-use image::{imageops, ImageBuffer, Luma, Rgba};
-use nalgebra::Vector3;
+use image::{imageops, ImageBuffer, ImageFormat, Luma, Rgba};
+use nalgebra::{Vector2, Vector3};
 use wavefront_obj::obj::{self, Object, Primitive};
 
-use rusterizer::{triangle, ZBuffer};
+use rusterizer::{triangle_texture, ZBuffer};
 
 const WIDTH: i32 = 800;
 const HEIGHT: i32 = 800;
@@ -41,9 +42,43 @@ fn world_to_screen(
     )
 }
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+struct Attribute {
+    pos: Vector4<f64>,
+    uv: Vector4<f32>,
+}
+
+struct Varying {
+    clr: Vector4
+}
+
+struct TextureProgram;
+
+impl ShaderProgram for TextureProgram {
+    type Attribute = Attribute;
+    type Varying = ();
+
+    fn vertex(
+        &self,
+        attr: &Self::Attribute,
+        _var: &mut Self::Varying,
+    ) -> Vector4<f64> {
+        attr.pos
+    }
+
+    fn fragment(
+        &self,
+        _pos: &Vector4<f64>,
+        _var: &Self::Varying,
+    ) -> Vector4<f64> {
+        Vector4::new(1.0, 0.0, 0.0, 1.0)
+    }
+}
+
 fn main() -> Result<(), Error> {
     let mut args = env::args().skip(1);
-    let path = args.next().expect("USAGE: prog path");
+    let model_path = args.next().expect("USAGE: prog modelpath texpath");
+    let tex_path = args.next().expect("USAGE: prog modelpath texpath");
 
     let light_dir = Vector3::new(0.0, 0.0, -1.0);
 
@@ -51,12 +86,21 @@ fn main() -> Result<(), Error> {
         ImageBuffer::from_pixel(WIDTH as u32, HEIGHT as u32, black());
     let mut z_buffer = ZBuffer::new(WIDTH as u32, HEIGHT as u32, -1.0);
 
-    let model_string = fs::read_to_string(&path)?;
+    let texture_file = File::open(tex_path)?;
+    let texture_reader = BufReader::new(texture_file);
+    let texture = imageops::flip_vertical(
+        &image::load(texture_reader, ImageFormat::TGA)?.to_rgba(),
+    );
+
+    let model_string = fs::read_to_string(&model_path)?;
     let model = obj::parse(model_string).expect("failed to parse model");
 
     for object in model.objects {
         let Object {
-            vertices, geometry, ..
+            vertices,
+            tex_vertices,
+            geometry,
+            ..
         } = object;
         for geom in geometry {
             for shape in geom.shapes {
@@ -66,9 +110,17 @@ fn main() -> Result<(), Error> {
                         let v2 = vertices[idx2.0];
                         let v3 = vertices[idx3.0];
 
+                        let vt1 = tex_vertices[idx1.1.unwrap()];
+                        let vt2 = tex_vertices[idx2.1.unwrap()];
+                        let vt3 = tex_vertices[idx3.1.unwrap()];
+
                         let world_a = Vector3::new(v1.x, v1.y, v1.z);
                         let world_b = Vector3::new(v2.x, v2.y, v2.z);
                         let world_c = Vector3::new(v3.x, v3.y, v3.z);
+
+                        let tex_a = Vector2::new(vt1.u, vt1.v);
+                        let tex_b = Vector2::new(vt2.u, vt2.v);
+                        let tex_c = Vector2::new(vt3.u, vt3.v);
 
                         let normal =
                             (world_c - world_a).cross(&(world_b - world_a));
@@ -93,13 +145,17 @@ fn main() -> Result<(), Error> {
                                 HALF_HEIGHT,
                             );
 
-                            triangle(
+                            triangle_texture(
                                 &mut image,
                                 &mut z_buffer,
                                 luma(light_intensity),
                                 screen_a,
                                 screen_b,
                                 screen_c,
+                                tex_a,
+                                tex_b,
+                                tex_c,
+                                &texture,
                             );
                         }
                     }
@@ -115,9 +171,9 @@ fn main() -> Result<(), Error> {
             Luma([(depth * 255.0) as u8])
         });
 
-    imageops::flip_vertical(&image).save("./triangle_light_per_tri.png")?;
+    imageops::flip_vertical(&image).save("./triangle_texture.png")?;
     imageops::flip_vertical(&z_buffer_image)
-        .save("./triangle_light_per_tri-depth.png")?;
+        .save("./triangle_texture-depth.png")?;
 
     Ok(())
 }
