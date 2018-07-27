@@ -98,8 +98,6 @@ impl ShaderProgram for SimpleProgram {
         let normal = nalgebra::normalize(&attr.norm);
         let light_intensity = nalgebra::dot(&normal, &self.u_light_dir);
 
-        // println!("{}", light_intensity);
-
         var.norm = normal;
         var.uv = attr.uv;
         var.light_intensity = light_intensity;
@@ -112,10 +110,8 @@ impl ShaderProgram for SimpleProgram {
         _pos: &Vector4<f64>,
         var: &Self::Varying,
     ) -> Vector4<f64> {
-        // Vector4::new(var.light_intensity, 0.0, 0.0, 1.0)
-        Vector4::new(var.norm.x, var.norm.y, var.norm.z, 1.0)
-        // Vector4::new(var.norm.x / 2.0 + 0.5, var.norm.y / 2.0 + 0.5,
-        // var.norm.z / 2.0 + 0.5, 1.0)
+        // let tex_color = self.u_tex.get_pixel(var.uv.x, var.uv.y);
+        Vector4::new(var.light_intensity, 0.0, 0.0, 1.0)
     }
 }
 
@@ -140,34 +136,12 @@ fn main() -> Result<(), Error> {
     let attributes = collect_attributes(model);
 
     let program = SimpleProgram::with_light_and_texture(
-        Vector3::new(0.0, 0.0, -1.0),
+        Vector3::new(0.0, 0.0, 1.0),
         texture,
     );
     let pipeline = Pipeline::new(program);
 
     pipeline.triangles(&attributes, &mut image, &mut z_buffer);
-
-    // let normal =
-    //     (world_c - world_a).cross(&(world_b - world_a));
-    // let norm_normal = nalgebra::normalize(&normal);
-    // let light_intensity =
-    //     nalgebra::dot(&norm_normal, &light_dir);
-
-    // if light_intensity > 0.0 {
-
-    //     triangle_texture(
-    //         &mut image,
-    //         &mut z_buffer,
-    //         luma(light_intensity),
-    //         screen_a,
-    //         screen_b,
-    //         screen_c,
-    //         tex_a,
-    //         tex_b,
-    //         tex_c,
-    //         &texture,
-    //     );
-    // }
 
     let z_buffer_image =
         ImageBuffer::from_fn(WIDTH as u32, HEIGHT as u32, |x, y| {
