@@ -10,20 +10,16 @@ use std::fs::{self, File};
 use std::io::BufReader;
 
 use failure::Error;
-use image::{imageops, ImageBuffer, ImageFormat, Luma, Rgba};
+use image::{imageops, ImageBuffer, ImageFormat};
 use nalgebra::{Vector2, Vector3, Vector4};
 use wavefront_obj::obj::{self, ObjSet, Object, Primitive};
 
+use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
 use rusterizer::pipeline::Pipeline;
 use rusterizer::shader::{ShaderProgram, Smooth};
-use rusterizer::ZBuffer;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
-
-fn black() -> Rgba<u8> {
-    Rgba([0, 0, 0, 255])
-}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Attribute {
@@ -71,17 +67,17 @@ impl Smooth for Varying {
 
 struct SimpleProgram {
     u_light_dir: Vector3<f64>,
-    u_tex: ImageBuffer<Rgba<u8>, Vec<u8>>,
+    // u_tex: ImageBuffer<Rgba<u8>, Vec<u8>>,
 }
 
 impl SimpleProgram {
     pub fn with_light_and_texture(
-        light_dir: Vector3<f64>,
-        tex: ImageBuffer<Rgba<u8>, Vec<u8>>,
+        light_dir: Vector3<f64>
+        // tex: ImageBuffer<Rgba<u8>, Vec<u8>>,
     ) -> SimpleProgram {
         SimpleProgram {
             u_light_dir: light_dir,
-            u_tex: tex,
+            // u_tex: tex,
         }
     }
 }
@@ -120,8 +116,15 @@ fn main() -> Result<(), Error> {
     let model_path = args.next().expect("USAGE: prog modelpath texpath");
     let tex_path = args.next().expect("USAGE: prog modelpath texpath");
 
-    let mut image = ImageBuffer::from_pixel(WIDTH, HEIGHT, black());
-    let mut z_buffer = ZBuffer::new(WIDTH, HEIGHT, -1.0);
+    let mut color_image = RgbaImage::from_pixel(
+        WIDTH,
+        HEIGHT,
+        Rgba {
+            data: [0, 0, 0, 255],
+        },
+    );
+    let mut depth_image =
+        DepthImage::from_pixel(WIDTH, HEIGHT, Depth { data: [-1.0] });
 
     let texture_file = File::open(tex_path)?;
     let texture_reader = BufReader::new(texture_file);
@@ -137,21 +140,27 @@ fn main() -> Result<(), Error> {
 
     let program = SimpleProgram::with_light_and_texture(
         Vector3::new(0.0, 0.0, 1.0),
-        texture,
+        // texture,
     );
     let pipeline = Pipeline::new(program);
 
-    pipeline.triangles(&attributes, &mut image, &mut z_buffer);
+    pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
 
-    let z_buffer_image =
-        ImageBuffer::from_fn(WIDTH as u32, HEIGHT as u32, |x, y| {
-            let depth = z_buffer.get(x, y) * 0.5 + 0.5;
-            Luma([(depth * 255.0) as u8])
-        });
+    let out_depth_image = ImageBuffer::from_fn(WIDTH, HEIGHT, |x, y| {
+        let depth = depth_image.pixel(x, y).data[0] * 0.5 + 0.5;
+        image::Luma([(depth * 255.0) as u8])
+    });
 
-    imageops::flip_vertical(&image).save("./shader_texture.png")?;
-    imageops::flip_vertical(&z_buffer_image)
-        .save("./triangle_texture-depth.png")?;
+    let out_color_image = ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
+        WIDTH,
+        HEIGHT,
+        color_image.into_raw(),
+    ).expect("failed to convert to output image");
+
+    imageops::flip_vertical(&out_color_image)
+        .save("./shader_texture-color.png")?;
+    imageops::flip_vertical(&out_depth_image)
+        .save("./shader_texture-depth.png")?;
 
     Ok(())
 }

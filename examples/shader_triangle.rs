@@ -6,18 +6,24 @@ extern crate rusterizer;
 use std::f64;
 
 use failure::Error;
-use image::{imageops, ImageBuffer, Rgba};
+use image::{imageops, ImageBuffer};
 use nalgebra::{Vector3, Vector4};
 
+use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
 use rusterizer::pipeline::Pipeline;
 use rusterizer::shader::{ShaderProgram, Smooth};
-use rusterizer::ZBuffer;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 800;
 
 fn black() -> Rgba<u8> {
-    Rgba([0, 0, 0, 255])
+    Rgba {
+        data: [0, 0, 0, 255],
+    }
+}
+
+fn depth() -> Depth<f64> {
+    Depth { data: [-1.0] }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -77,8 +83,8 @@ impl ShaderProgram for SimpleProgram {
 }
 
 fn main() -> Result<(), Error> {
-    let mut image = ImageBuffer::from_pixel(WIDTH, HEIGHT, black());
-    let mut z_buffer = ZBuffer::new(WIDTH, HEIGHT, -1.0);
+    let mut color_image = RgbaImage::from_pixel(WIDTH, HEIGHT, black());
+    let mut depth_image = DepthImage::from_pixel(WIDTH, HEIGHT, depth());
 
     let attributes = vec![
         Attribute {
@@ -97,9 +103,15 @@ fn main() -> Result<(), Error> {
 
     let pipeline = Pipeline::new(SimpleProgram);
 
-    pipeline.triangles(&attributes, &mut image, &mut z_buffer);
+    pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
 
-    imageops::flip_vertical(&image).save("./shader_triangle.png")?;
+    let out_color_image = ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
+        WIDTH,
+        HEIGHT,
+        color_image.into_raw(),
+    ).expect("failed to convert to output image");
+
+    imageops::flip_vertical(&out_color_image).save("./shader_triangle.png")?;
 
     Ok(())
 }

@@ -1,10 +1,9 @@
 use std::{f64, mem};
 
-use image::{Rgba, RgbaImage};
-use nalgebra::{self, U2, Vector2, Vector3, Vector4};
+use image::{Depth, DepthImage, Rgba, RgbaImage};
+use nalgebra::{U2, Vector2, Vector3, Vector4};
 
 use shader::{ShaderProgram, Smooth};
-use z_buffer::ZBuffer;
 
 pub struct Pipeline<S: ShaderProgram> {
     shader: S,
@@ -18,8 +17,8 @@ impl<S: ShaderProgram> Pipeline<S> {
     pub fn triangles(
         &self,
         buffer: &[S::Attribute],
-        image_color: &mut RgbaImage,
-        image_depth: &mut ZBuffer,
+        image_color: &mut RgbaImage<u8>,
+        image_depth: &mut DepthImage<f64>,
     ) {
         let width = image_color.width();
         let height = image_color.height();
@@ -50,7 +49,11 @@ impl<S: ShaderProgram> Pipeline<S> {
         }
     }
 
-    pub fn lines(&self, buffer: &[S::Attribute], image_color: &mut RgbaImage) {
+    pub fn lines(
+        &self,
+        buffer: &[S::Attribute],
+        image_color: &mut RgbaImage<u8>,
+    ) {
         let width = image_color.width();
         let height = image_color.height();
         let half_width = f64::from(width / 2);
@@ -71,7 +74,7 @@ impl<S: ShaderProgram> Pipeline<S> {
             line(
                 image_color,
                 // TODO: interpolate color
-                Rgba([255, 255, 255, 255]),
+                Rgba { data: [255; 4] },
                 screen_a.x as i32,
                 screen_a.y as i32,
                 screen_b.x as i32,
@@ -83,8 +86,8 @@ impl<S: ShaderProgram> Pipeline<S> {
     /// Writes a triangle to image and z_buffer.
     fn triangle(
         &self,
-        image_color: &mut RgbaImage,
-        image_depth: &mut ZBuffer,
+        image_color: &mut RgbaImage<u8>,
+        image_depth: &mut DepthImage<f64>,
         (a, b, c): (Vector4<f64>, Vector4<f64>, Vector4<f64>),
         (va, vb, vc): (S::Varying, S::Varying, S::Varying),
     ) {
@@ -108,11 +111,12 @@ impl<S: ShaderProgram> Pipeline<S> {
 
                     let f_pos = Vector4::interpolate(a, b, c, bc);
                     let f_var = S::Varying::interpolate(va, vb, vc, bc);
+                    let f_depth = Depth { data: [f_pos.z] };
 
-                    if image_depth.get(x, y) < f_pos.z {
+                    if image_depth.pixel(x, y) < &f_depth {
                         let f_color = self.shader.fragment(&f_pos, &f_var);
-                        image_depth.set(x, y, f_pos.z);
-                        image_color.put_pixel(x, y, vec_to_rgba(f_color));
+                        image_depth.set_pixel(x, y, f_depth);
+                        image_color.set_pixel(x, y, vec_to_rgba(f_color));
                     }
                 }
             }
@@ -168,7 +172,7 @@ fn barycentric(
 
 /// Draw a line from src to dst using Bresenham's Algorithm
 fn line(
-    image: &mut RgbaImage,
+    image: &mut RgbaImage<u8>,
     color: Rgba<u8>,
     mut src_x: i32,
     mut src_y: i32,
@@ -195,9 +199,9 @@ fn line(
     let mut y = src_y;
     for x in src_x..=dst_x {
         if transposed {
-            image.put_pixel(y as u32, x as u32, color);
+            image.set_pixel(y as u32, x as u32, color);
         } else {
-            image.put_pixel(x as u32, y as u32, color);
+            image.set_pixel(x as u32, y as u32, color);
         }
 
         error2 += derror2;
@@ -209,12 +213,14 @@ fn line(
 }
 
 fn vec_to_rgba(color: Vector4<f64>) -> Rgba<u8> {
-    Rgba([
-        (clamp(color.x, 0.0, 1.0) * 255.0) as u8,
-        (clamp(color.y, 0.0, 1.0) * 255.0) as u8,
-        (clamp(color.z, 0.0, 1.0) * 255.0) as u8,
-        (clamp(color.w, 0.0, 1.0) * 255.0) as u8,
-    ])
+    Rgba {
+        data: [
+            (clamp(color.x, 0.0, 1.0) * 255.0) as u8,
+            (clamp(color.y, 0.0, 1.0) * 255.0) as u8,
+            (clamp(color.z, 0.0, 1.0) * 255.0) as u8,
+            (clamp(color.w, 0.0, 1.0) * 255.0) as u8,
+        ],
+    }
 }
 
 fn clamp(val: f64, min: f64, max: f64) -> f64 {
