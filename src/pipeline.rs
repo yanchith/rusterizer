@@ -25,12 +25,12 @@ impl<S: ShaderProgram> Pipeline<S> {
         let half_width = f64::from(width / 2);
         let half_height = f64::from(height / 2);
 
+        let mut va = S::Varying::default();
+        let mut vb = S::Varying::default();
+        let mut vc = S::Varying::default();
+
         for i in 0..buffer.len() / 3 {
             let attr = i * 3;
-
-            let mut va = S::Varying::default();
-            let mut vb = S::Varying::default();
-            let mut vc = S::Varying::default();
 
             let world_a = self.shader.vertex(&buffer[attr], &mut va);
             let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
@@ -43,8 +43,8 @@ impl<S: ShaderProgram> Pipeline<S> {
             self.triangle(
                 image_color,
                 image_depth,
-                &(screen_a, screen_b, screen_c),
-                &(va, vb, vc),
+                (&screen_a, &screen_b, &screen_c),
+                (&va, &vb, &vc),
             );
         }
     }
@@ -59,11 +59,11 @@ impl<S: ShaderProgram> Pipeline<S> {
         let half_width = f64::from(width / 2);
         let half_height = f64::from(height / 2);
 
+        let mut va = S::Varying::default();
+        let mut vb = S::Varying::default();
+
         for i in 0..buffer.len() / 2 {
             let attr = i * 2;
-
-            let mut va = S::Varying::default();
-            let mut vb = S::Varying::default();
 
             let world_a = self.shader.vertex(&buffer[attr], &mut va);
             let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
@@ -88,8 +88,8 @@ impl<S: ShaderProgram> Pipeline<S> {
         &self,
         image_color: &mut RgbaImage<u8>,
         image_depth: &mut DepthImage<f64>,
-        (a, b, c): &(Vector4<f64>, Vector4<f64>, Vector4<f64>),
-        (va, vb, vc): &(S::Varying, S::Varying, S::Varying),
+        (a, b, c): (&Vector4<f64>, &Vector4<f64>, &Vector4<f64>),
+        (va, vb, vc): (&S::Varying, &S::Varying, &S::Varying),
     ) {
         let width = image_color.width();
         let height = image_color.height();
