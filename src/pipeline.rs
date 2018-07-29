@@ -3,6 +3,7 @@ use std::{f64, mem};
 use image::{Depth, DepthImage, Rgba, RgbaImage};
 use nalgebra::{U2, Vector2, Vector3, Vector4};
 
+use math;
 use shader::{ShaderProgram, Smooth};
 
 pub struct Pipeline<S: ShaderProgram> {
@@ -215,16 +216,12 @@ fn line(
 fn vec_to_rgba(color: Vector4<f64>) -> Rgba<u8> {
     Rgba {
         data: [
-            (clamp(color.x, 0.0, 1.0) * 255.0) as u8,
-            (clamp(color.y, 0.0, 1.0) * 255.0) as u8,
-            (clamp(color.z, 0.0, 1.0) * 255.0) as u8,
-            (clamp(color.w, 0.0, 1.0) * 255.0) as u8,
+            (math::clamp(color.x, 0.0, 1.0) * 255.0) as u8,
+            (math::clamp(color.y, 0.0, 1.0) * 255.0) as u8,
+            (math::clamp(color.z, 0.0, 1.0) * 255.0) as u8,
+            (math::clamp(color.w, 0.0, 1.0) * 255.0) as u8,
         ],
     }
-}
-
-fn clamp(val: f64, min: f64, max: f64) -> f64 {
-    f64::min(max, f64::max(min, val))
 }
 
 fn world_to_screen(

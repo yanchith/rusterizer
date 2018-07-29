@@ -1,8 +1,11 @@
 use std::fmt::Debug;
 use std::slice::{Chunks, ChunksMut};
 
+use nalgebra::{Vector2, Vector4};
 use num::traits::{Bounded, Num, NumCast};
 use num::Zero;
+
+use math;
 
 /// Wishlist for image (most of functionality can be inspired by
 /// image::ImageBuffer) - serves both as color and depth buffer
@@ -111,6 +114,24 @@ impl<P: Pixel + Copy> Image<P> {
         P::from_slice_mut(&mut self.buffer[index..index + channel_count])
     }
 
+    // TODO: make generic over all float vectors
+    pub fn sample_nearest<V>(&self, uv: &Vector2<f64>) -> V
+    where
+        P: Into<V>,
+    {
+        let u = math::clamp(uv.x, 0.0, 1.0);
+        let v = math::clamp(uv.y, 0.0, 1.0);
+
+        let x = u * self.width.saturating_sub(1) as f64;
+        let y = v * self.height.saturating_sub(1) as f64;
+
+        let channel_count = P::channel_count() as usize;
+        let index = channel_count * (y as usize * self.width + x as usize);
+        let pixel = P::from_slice(&self.buffer[index..index + channel_count]);
+
+        Into::<V>::into(*pixel)
+    }
+
     pub fn set_pixel(&mut self, x: u32, y: u32, pixel: P) {
         *self.pixel_mut(x, y) = pixel;
     }
@@ -195,6 +216,29 @@ impl<T: Primitive> Pixel for Rgba<T> {
     fn from_slice_mut(slice: &mut [T]) -> &mut Self {
         assert_eq!(slice.len(), 4);
         unsafe { &mut *(slice.as_ptr() as *mut Rgba<T>) }
+    }
+}
+
+impl<T: Primitive + 'static> From<Vector4<T>> for Rgba<T> {
+    fn from(vector4: Vector4<T>) -> Rgba<T> {
+        Rgba {
+            data: [vector4.x, vector4.y, vector4.z, vector4.w],
+        }
+    }
+}
+
+// Orphan rules T_T
+// impl<T: Primitive + 'static> From<Rgba<T>> for Vector4<T> {
+//     fn from(rgba: Rgba<T>) -> Vector4<T> {
+//         let [r, g, b, a] = rgba.data;
+//         Vector4::new(r, g, b, a)
+//     }
+// }
+
+impl<T: Primitive + 'static> Into<Vector4<T>> for Rgba<T> {
+    fn into(self) -> Vector4<T> {
+        let [r, g, b, a] = self.data;
+        Vector4::new(r, g, b, a)
     }
 }
 

@@ -5,3 +5,4 @@ pub mod image;
 pub mod shader;
 pub mod pipeline;
 
+mod math;
