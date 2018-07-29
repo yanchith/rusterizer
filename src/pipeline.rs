@@ -43,8 +43,8 @@ impl<S: ShaderProgram> Pipeline<S> {
             self.triangle(
                 image_color,
                 image_depth,
-                (screen_a, screen_b, screen_c),
-                (va, vb, vc),
+                &(screen_a, screen_b, screen_c),
+                &(va, vb, vc),
             );
         }
     }
@@ -88,8 +88,8 @@ impl<S: ShaderProgram> Pipeline<S> {
         &self,
         image_color: &mut RgbaImage<u8>,
         image_depth: &mut DepthImage<f64>,
-        (a, b, c): (Vector4<f64>, Vector4<f64>, Vector4<f64>),
-        (va, vb, vc): (S::Varying, S::Varying, S::Varying),
+        (a, b, c): &(Vector4<f64>, Vector4<f64>, Vector4<f64>),
+        (va, vb, vc): &(S::Varying, S::Varying, S::Varying),
     ) {
         let width = image_color.width();
         let height = image_color.height();
@@ -109,8 +109,8 @@ impl<S: ShaderProgram> Pipeline<S> {
                         continue;
                     }
 
-                    let f_pos = Vector4::interpolate(a, b, c, bc);
-                    let f_var = S::Varying::interpolate(va, vb, vc, bc);
+                    let f_pos = Vector4::interpolate(a, b, c, &bc);
+                    let f_var = S::Varying::interpolate(va, vb, vc, &bc);
                     let f_depth = Depth { data: [f_pos.z] };
 
                     if image_depth.pixel(x, y) < &f_depth {

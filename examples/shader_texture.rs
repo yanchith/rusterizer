@@ -47,18 +47,18 @@ impl Default for Varying {
 
 impl Smooth for Varying {
     fn interpolate(
-        a: Varying,
-        b: Varying,
-        c: Varying,
-        bc: Vector3<f64>,
+        a: &Varying,
+        b: &Varying,
+        c: &Varying,
+        bc: &Vector3<f64>,
     ) -> Varying {
         Varying {
-            norm: Vector3::interpolate(a.norm, b.norm, c.norm, bc),
-            uv: Vector2::interpolate(a.uv, b.uv, c.uv, bc),
+            norm: Vector3::interpolate(&a.norm, &b.norm, &c.norm, bc),
+            uv: Vector2::interpolate(&a.uv, &b.uv, &c.uv, bc),
             light_intensity: f64::interpolate(
-                a.light_intensity,
-                b.light_intensity,
-                c.light_intensity,
+                &a.light_intensity,
+                &b.light_intensity,
+                &c.light_intensity,
                 bc,
             ),
         }
@@ -72,8 +72,7 @@ struct SimpleProgram {
 
 impl SimpleProgram {
     pub fn with_light_and_texture(
-        light_dir: Vector3<f64>
-        // tex: ImageBuffer<Rgba<u8>, Vec<u8>>,
+        light_dir: Vector3<f64> // tex: ImageBuffer<Rgba<u8>, Vec<u8>>
     ) -> SimpleProgram {
         SimpleProgram {
             u_light_dir: light_dir,

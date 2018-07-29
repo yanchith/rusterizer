@@ -47,13 +47,13 @@ impl Default for Varying {
 
 impl Smooth for Varying {
     fn interpolate(
-        a: Varying,
-        b: Varying,
-        c: Varying,
-        bc: Vector3<f64>,
+        a: &Varying,
+        b: &Varying,
+        c: &Varying,
+        bc: &Vector3<f64>,
     ) -> Varying {
         Varying {
-            clr: Vector4::interpolate(a.clr, b.clr, c.clr, bc),
+            clr: Vector4::interpolate(&a.clr, &b.clr, &c.clr, bc),
         }
     }
 }
