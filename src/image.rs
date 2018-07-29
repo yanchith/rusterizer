@@ -55,28 +55,31 @@ impl<P: Pixel + Copy> Image<P> {
         for p in image.pixels_mut() {
             *p = pixel;
         }
-
         image
     }
 
-    // pub fn from_raw<T: P::DataType>(
-    //     buffer: Vec<T>,
-    //     width: u32,
-    //     height: u32,
-    // ) -> Option<Image<P>> {
-    //     let w = width as usize;
-    //     let h = height as usize;
-    //     let c = P::channel_count() as usize;
-    //     if w * h * c <= buffer.len() {
-    //         Image {
-    //             width: w,
-    //             height: h,
-    //             buffer,
-    //         }
-    //     } else {
-    //         None
-    //     }
-    // }
+    pub fn from_raw<T>(
+        buffer: Vec<T>,
+        width: u32,
+        height: u32,
+    ) -> Option<Image<P>>
+    where
+        T: Primitive,
+        P: Pixel<DataType = T>,
+    {
+        let w = width as usize;
+        let h = height as usize;
+        let c = P::channel_count() as usize;
+        if w * h * c <= buffer.len() {
+            Some(Image {
+                width: w,
+                height: h,
+                buffer,
+            })
+        } else {
+            None
+        }
+    }
 
     pub fn into_raw(self) -> Vec<P::DataType> {
         self.buffer
