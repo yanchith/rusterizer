@@ -125,10 +125,7 @@ impl<P: Pixel + Copy> Image<P> {
         let x = u * self.width.saturating_sub(1) as f64;
         let y = v * self.height.saturating_sub(1) as f64;
 
-        let channel_count = P::channel_count() as usize;
-        let index = channel_count * (y as usize * self.width + x as usize);
-        let pixel = P::from_slice(&self.buffer[index..index + channel_count]);
-
+        let pixel = self.pixel(x as u32, y as u32);
         Into::<V>::into(*pixel)
     }
 
@@ -215,7 +212,7 @@ impl<T: Primitive> Pixel for Rgba<T> {
 
     fn from_slice_mut(slice: &mut [T]) -> &mut Self {
         assert_eq!(slice.len(), 4);
-        unsafe { &mut *(slice.as_ptr() as *mut Rgba<T>) }
+        unsafe { &mut *(slice.as_mut_ptr() as *mut Rgba<T>) }
     }
 }
 
@@ -269,7 +266,7 @@ impl<T: Primitive> Pixel for Depth<T> {
 
     fn from_slice_mut(slice: &mut [T]) -> &mut Self {
         assert_eq!(slice.len(), 1);
-        unsafe { &mut *(slice.as_ptr() as *mut Depth<T>) }
+        unsafe { &mut *(slice.as_mut_ptr() as *mut Depth<T>) }
     }
 }
 

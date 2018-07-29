@@ -37,6 +37,8 @@ impl<S: ShaderProgram> Pipeline<S> {
             let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
             let world_c = self.shader.vertex(&buffer[attr + 2], &mut vc);
 
+            // TODO: backface culling
+
             let screen_a = world_to_screen(world_a, half_width, half_height);
             let screen_b = world_to_screen(world_b, half_width, half_height);
             let screen_c = world_to_screen(world_c, half_width, half_height);
@@ -140,8 +142,8 @@ fn bounding_box(
     (
         Vector2::new(xmin as u32, ymin as u32),
         Vector2::new(
-            u32::min(xmax as u32, width - 1),
-            u32::min(ymax as u32, height - 1),
+            u32::min(xmax as u32, width.saturating_sub(1)),
+            u32::min(ymax as u32, height.saturating_sub(1)),
         ),
     )
 }

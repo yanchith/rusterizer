@@ -67,16 +67,17 @@ impl Smooth for Varying {
 
 struct SimpleProgram {
     u_light_dir: Vector3<f64>,
-    // u_tex: ImageBuffer<Rgba<u8>, Vec<u8>>,
+    u_tex: RgbaImage<u8>,
 }
 
 impl SimpleProgram {
     pub fn with_light_and_texture(
-        light_dir: Vector3<f64> // tex: ImageBuffer<Rgba<u8>, Vec<u8>>
+        light_dir: Vector3<f64>,
+        tex: RgbaImage<u8>,
     ) -> SimpleProgram {
         SimpleProgram {
             u_light_dir: light_dir,
-            // u_tex: tex,
+            u_tex: tex,
         }
     }
 }
@@ -105,8 +106,16 @@ impl ShaderProgram for SimpleProgram {
         _pos: &Vector4<f64>,
         var: &Self::Varying,
     ) -> Vector4<f64> {
-        // let tex_color = self.u_tex.get_pixel(var.uv.x, var.uv.y);
-        Vector4::new(var.light_intensity, 0.0, 0.0, 1.0)
+        let tex_color: Vector4<u8> = self.u_tex.sample_nearest(&var.uv);
+        Vector4::new(
+            f64::from(tex_color.x) / 255.0,
+            f64::from(tex_color.y) / 255.0,
+            f64::from(tex_color.z) / 255.0,
+            1.0,
+            // f64::from(tex_color.w) / 255.0,
+        )
+
+        // Vector4::new(var.uv.x, var.uv.y, 0.0, 1.0)
     }
 }
 
@@ -139,7 +148,7 @@ fn main() -> Result<(), Error> {
 
     let program = SimpleProgram::with_light_and_texture(
         Vector3::new(0.0, 0.0, 1.0),
-        // texture,
+        RgbaImage::from_raw(texture.into_raw(), WIDTH, HEIGHT).unwrap(),
     );
     let pipeline = Pipeline::new(program);
 
