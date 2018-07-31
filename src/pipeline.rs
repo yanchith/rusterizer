@@ -97,7 +97,7 @@ impl<S: ShaderProgram> Pipeline<S> {
         let width = image_color.width();
         let height = image_color.height();
 
-        // TODO: don't clone, use VectorSlice2
+        // TODO: don't clone, find a way to solve VectorSlice2 type error
         let a2 = a.fixed_rows::<U2>(0).clone_owned();
         let b2 = b.fixed_rows::<U2>(0).clone_owned();
         let c2 = c.fixed_rows::<U2>(0).clone_owned();

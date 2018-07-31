@@ -114,7 +114,7 @@ impl<P: Pixel + Copy> Image<P> {
         P::from_slice_mut(&mut self.buffer[index..index + channel_count])
     }
 
-    // TODO: make generic over all float vectors
+    // TODO: make uv generic over all float vectors
     pub fn sample_nearest<V>(&self, uv: &Vector2<f64>) -> V
     where
         P: Into<V>,
@@ -225,17 +225,14 @@ impl<T: Primitive + 'static> From<Vector4<T>> for Rgba<T> {
 }
 
 // Orphan rules T_T
-// impl<T: Primitive + 'static> From<Rgba<T>> for Vector4<T> {
-//     fn from(rgba: Rgba<T>) -> Vector4<T> {
-//         let [r, g, b, a] = rgba.data;
-//         Vector4::new(r, g, b, a)
-//     }
-// }
-
-impl<T: Primitive + 'static> Into<Vector4<T>> for Rgba<T> {
+impl<T, U> Into<Vector4<T>> for Rgba<U>
+where
+    T: Primitive + 'static,
+    U: Into<T> + Primitive + 'static,
+{
     fn into(self) -> Vector4<T> {
         let [r, g, b, a] = self.data;
-        Vector4::new(r, g, b, a)
+        Vector4::new(r.into(), g.into(), b.into(), a.into())
     }
 }
 

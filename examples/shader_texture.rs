@@ -106,16 +106,8 @@ impl ShaderProgram for SimpleProgram {
         _pos: &Vector4<f64>,
         var: &Self::Varying,
     ) -> Vector4<f64> {
-        let tex_color: Vector4<u8> = self.u_tex.sample_nearest(&var.uv);
-        Vector4::new(
-            f64::from(tex_color.x) / 255.0,
-            f64::from(tex_color.y) / 255.0,
-            f64::from(tex_color.z) / 255.0,
-            1.0,
-            // f64::from(tex_color.w) / 255.0,
-        )
-
-        // Vector4::new(var.uv.x, var.uv.y, 0.0, 1.0)
+        let tex_color = self.u_tex.sample_nearest::<Vector4<f64>>(&var.uv) / 255.0;
+        tex_color * var.light_intensity
     }
 }
 
