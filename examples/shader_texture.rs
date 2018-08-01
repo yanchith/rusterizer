@@ -138,9 +138,11 @@ fn main() -> Result<(), Error> {
 
     let attributes = collect_attributes(model);
 
+    let tex_width = texture.width();
+    let tex_height = texture.height();
     let program = SimpleProgram::with_light_and_texture(
         Vector3::new(0.0, 0.0, 1.0),
-        RgbaImage::from_raw(texture.into_raw(), WIDTH, HEIGHT).unwrap(),
+        RgbaImage::from_raw(texture.into_raw(), tex_width, tex_height).unwrap(),
     );
     let pipeline = Pipeline::new(program);
 
