@@ -2,43 +2,44 @@ use std::fmt::Debug;
 use std::slice::{Chunks, ChunksMut};
 
 use nalgebra::{Vector2, Vector4};
-use num::traits::{Bounded, Num, NumCast};
-use num::Zero;
+use num::{Zero, Num};
 
 use math;
-
-/// Wishlist for image (most of functionality can be inspired by
-/// image::ImageBuffer) - serves both as color and depth buffer
-/// - generic over image channel count: RED, RG, RGB, RGBA
-/// - generic over data type: all primitives
-/// - get and set data as Vector{1-4} depending on channel count
-/// - get by pixel index (texelFetch())
-///   * (u32, u32)
-///   * Vector2<u32>
-/// - get by uv index  (texture())
-///   * (f64, f64)
-///   * Vector2<f64>
-/// - interop
-///   * into_raw
-///   * from_raw
 
 pub type RgbaImage<T> = Image<Rgba<T>>;
 pub type DepthImage<T> = Image<Depth<T>>;
 
+pub trait ColorData: Num + Copy + Clone + Debug {}
+
+impl ColorData for usize {}
+impl ColorData for u8 {}
+impl ColorData for u16 {}
+impl ColorData for u32 {}
+impl ColorData for u64 {}
+impl ColorData for u128 {}
+
+impl ColorData for isize {}
+impl ColorData for i8 {}
+impl ColorData for i16 {}
+impl ColorData for i32 {}
+impl ColorData for i64 {}
+impl ColorData for i128 {}
+
+impl ColorData for f32 {}
+impl ColorData for f64 {}
+
 pub trait Pixel {
-    type DataType: Primitive;
+    type ColorChannel: ColorData;
     fn channel_count() -> u8;
-    fn as_slice(&self) -> &[Self::DataType];
-    fn as_slice_mut(&mut self) -> &mut [Self::DataType];
-    fn from_slice(slice: &[Self::DataType]) -> &Self;
-    fn from_slice_mut(slice: &mut [Self::DataType]) -> &mut Self;
+    fn from_slice(slice: &[Self::ColorChannel]) -> &Self;
+    fn from_slice_mut(slice: &mut [Self::ColorChannel]) -> &mut Self;
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Image<P: Pixel> {
     width: usize,
     height: usize,
-    buffer: Vec<P::DataType>,
+    buffer: Vec<P::ColorChannel>,
 }
 
 impl<P: Pixel + Copy> Image<P> {
@@ -67,8 +68,8 @@ impl<P: Pixel + Copy> Image<P> {
         height: u32,
     ) -> Option<Image<P>>
     where
-        T: Primitive,
-        P: Pixel<DataType = T>,
+        T: ColorData,
+        P: Pixel<ColorChannel = T>,
     {
         let w = width as usize;
         let h = height as usize;
@@ -84,7 +85,7 @@ impl<P: Pixel + Copy> Image<P> {
         }
     }
 
-    pub fn into_raw(self) -> Vec<P::DataType> {
+    pub fn into_raw(self) -> Vec<P::ColorChannel> {
         self.buffer
     }
 
@@ -149,15 +150,15 @@ impl<P: Pixel + Copy> Image<P> {
 pub struct Pixels<'a, P>
 where
     P: Pixel + 'a,
-    P::DataType: 'a,
+    P::ColorChannel: 'a,
 {
-    chunks: Chunks<'a, P::DataType>,
+    chunks: Chunks<'a, P::ColorChannel>,
 }
 
 impl<'a, P> Iterator for Pixels<'a, P>
 where
     P: Pixel + 'a,
-    P::DataType: 'a,
+    P::ColorChannel: 'a,
 {
     type Item = &'a P;
 
@@ -169,15 +170,15 @@ where
 pub struct PixelsMut<'a, P>
 where
     P: Pixel + 'a,
-    P::DataType: 'a,
+    P::ColorChannel: 'a,
 {
-    chunks: ChunksMut<'a, P::DataType>,
+    chunks: ChunksMut<'a, P::ColorChannel>,
 }
 
 impl<'a, P> Iterator for PixelsMut<'a, P>
 where
     P: Pixel + 'a,
-    P::DataType: 'a,
+    P::ColorChannel: 'a,
 {
     type Item = &'a mut P;
 
@@ -187,22 +188,15 @@ where
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct Rgba<T: Primitive> {
+pub struct Rgba<T: Num> {
     pub data: [T; 4],
 }
 
-impl<T: Primitive> Pixel for Rgba<T> {
-    type DataType = T;
+impl<T: ColorData> Pixel for Rgba<T> {
+    type ColorChannel = T;
+
     fn channel_count() -> u8 {
         4
-    }
-
-    fn as_slice(&self) -> &[T] {
-        &self.data
-    }
-
-    fn as_slice_mut(&mut self) -> &mut [T] {
-        &mut self.data
     }
 
     fn from_slice(slice: &[T]) -> &Self {
@@ -216,10 +210,10 @@ impl<T: Primitive> Pixel for Rgba<T> {
     }
 }
 
-impl<T: Primitive + 'static> From<Vector4<T>> for Rgba<T> {
-    fn from(vector4: Vector4<T>) -> Rgba<T> {
+impl<T: ColorData + 'static> From<Vector4<T>> for Rgba<T> {
+    fn from(v: Vector4<T>) -> Rgba<T> {
         Rgba {
-            data: [vector4.x, vector4.y, vector4.z, vector4.w],
+            data: [v.x, v.y, v.z, v.w],
         }
     }
 }
@@ -227,8 +221,8 @@ impl<T: Primitive + 'static> From<Vector4<T>> for Rgba<T> {
 // Orphan rules T_T
 impl<T, U> Into<Vector4<T>> for Rgba<U>
 where
-    T: Primitive + 'static,
-    U: Into<T> + Primitive + 'static,
+    T: ColorData + 'static,
+    U: Into<T> + ColorData + 'static,
 {
     fn into(self) -> Vector4<T> {
         let [r, g, b, a] = self.data;
@@ -237,23 +231,15 @@ where
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
-pub struct Depth<T: Primitive> {
+pub struct Depth<T: ColorData> {
     pub data: [T; 1],
 }
 
-impl<T: Primitive> Pixel for Depth<T> {
-    type DataType = T;
+impl<T: ColorData> Pixel for Depth<T> {
+    type ColorChannel = T;
 
     fn channel_count() -> u8 {
         1
-    }
-
-    fn as_slice(&self) -> &[T] {
-        &self.data
-    }
-
-    fn as_slice_mut(&mut self) -> &mut [T] {
-        &mut self.data
     }
 
     fn from_slice(slice: &[T]) -> &Self {
@@ -266,26 +252,3 @@ impl<T: Primitive> Pixel for Depth<T> {
         unsafe { &mut *(slice.as_mut_ptr() as *mut Depth<T>) }
     }
 }
-
-pub trait Primitive:
-    Debug + Clone + Copy + PartialOrd<Self> + Num + NumCast + Bounded
-{
-    // Empty
-}
-
-impl Primitive for usize {}
-impl Primitive for u8 {}
-impl Primitive for u16 {}
-impl Primitive for u32 {}
-impl Primitive for u64 {}
-impl Primitive for u128 {}
-
-impl Primitive for isize {}
-impl Primitive for i8 {}
-impl Primitive for i16 {}
-impl Primitive for i32 {}
-impl Primitive for i64 {}
-impl Primitive for i128 {}
-
-impl Primitive for f32 {}
-impl Primitive for f64 {}
