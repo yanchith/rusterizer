@@ -6,12 +6,13 @@ extern crate wavefront_obj;
 
 use std::env;
 use std::f64;
+use std::f64::consts::PI;
 use std::fs::{self, File};
 use std::io::BufReader;
 
 use failure::Error;
 use image::{imageops, ImageBuffer, ImageFormat};
-use nalgebra::{Vector2, Vector3, Vector4};
+use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
 use wavefront_obj::obj::{self, ObjSet, Object, Primitive};
 
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
@@ -66,16 +67,19 @@ impl Smooth for Varying {
 }
 
 struct SimpleProgram {
+    u_proj: Matrix4<f64>,
     u_light_dir: Vector3<f64>,
     u_tex: RgbaImage<u8>,
 }
 
 impl SimpleProgram {
-    pub fn with_light_and_texture(
+    pub fn with_uniforms(
+        proj: Matrix4<f64>,
         light_dir: Vector3<f64>,
         tex: RgbaImage<u8>,
     ) -> SimpleProgram {
         SimpleProgram {
+            u_proj: proj,
             u_light_dir: light_dir,
             u_tex: tex,
         }
@@ -98,7 +102,7 @@ impl ShaderProgram for SimpleProgram {
         var.uv = attr.uv;
         var.light_intensity = light_intensity;
 
-        attr.pos
+        self.u_proj * attr.pos
     }
 
     fn fragment(
@@ -106,8 +110,10 @@ impl ShaderProgram for SimpleProgram {
         _pos: &Vector4<f64>,
         var: &Self::Varying,
     ) -> Vector4<f64> {
-        let tex_color = self.u_tex.sample_nearest::<Vector4<f64>>(&var.uv) / 255.0;
-        tex_color * var.light_intensity
+        let color_tex =
+            self.u_tex.sample_nearest::<Vector4<f64>>(&var.uv) / 255.0;
+        let color = color_tex * var.light_intensity;
+        Vector4::new(color.x, color.y, color.z, 1.0)
     }
 }
 
@@ -128,10 +134,9 @@ fn main() -> Result<(), Error> {
 
     let texture_file = File::open(tex_path)?;
     let texture_reader = BufReader::new(texture_file);
-    let texture = imageops::flip_vertical(&image::load(
-        texture_reader,
-        ImageFormat::TGA,
-    )?.to_rgba());
+    let texture = imageops::flip_vertical(
+        &image::load(texture_reader, ImageFormat::TGA)?.to_rgba(),
+    );
 
     let model_string = fs::read_to_string(&model_path)?;
     let model = obj::parse(model_string).expect("failed to parse model");
@@ -140,11 +145,22 @@ fn main() -> Result<(), Error> {
 
     let tex_width = texture.width();
     let tex_height = texture.height();
-    let program = SimpleProgram::with_light_and_texture(
+    let pipeline = Pipeline::new(SimpleProgram::with_uniforms(
+        Matrix4::new(
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, 0.0, -1.0 / 5.0, 1.0,
+        ),
+        // Matrix4::new_perspective(
+        //     tex_width as f64 / tex_height as f64,
+        //     PI / 4.0,
+        //     0.001,
+        //     1000.0,
+        // ),
         Vector3::new(0.0, 0.0, 1.0),
         RgbaImage::from_raw(texture.into_raw(), tex_width, tex_height).unwrap(),
-    );
-    let pipeline = Pipeline::new(program);
+    ));
 
     pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
 

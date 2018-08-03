@@ -39,9 +39,21 @@ impl<S: ShaderProgram> Pipeline<S> {
 
             // TODO: backface culling
 
-            let screen_a = world_to_screen(world_a, half_width, half_height);
-            let screen_b = world_to_screen(world_b, half_width, half_height);
-            let screen_c = world_to_screen(world_c, half_width, half_height);
+            let screen_a = world_to_screen(
+                from_homogenous(world_a),
+                half_width,
+                half_height,
+            );
+            let screen_b = world_to_screen(
+                from_homogenous(world_b),
+                half_width,
+                half_height,
+            );
+            let screen_c = world_to_screen(
+                from_homogenous(world_c),
+                half_width,
+                half_height,
+            );
 
             self.triangle(
                 image_color,
@@ -237,4 +249,8 @@ fn world_to_screen(
         world_coords.z,
         world_coords.w,
     )
+}
+
+fn from_homogenous(vec: Vector4<f64>) -> Vector4<f64> {
+    Vector4::new(vec.x / vec.w, vec.y / vec.w, vec.z / vec.w, 1.0)
 }
