@@ -24,11 +24,14 @@ __Short term__
 
 - terminal example
 - window/glutin example
-- polish nalgebra interop (add From/Into impls as needed)
+- backface culling
+- polish nalgebra interop (From/Into impls)
+  * can we make float normalization between integer and float data in images?
 - proc macro for varyings
 
 __Long term__
 
 - postprocessing example
+- actual clipping
 - geometry shaders
 - think about data parallelism
