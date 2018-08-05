@@ -24,15 +24,16 @@ __Short term__
 
 - terminal example
 - window/glutin example
-- backface culling
+- proc macro for varyings
 - polish nalgebra interop (From/Into impls)
   * float normalization in From/Into impls?
   * float normalization in image?
-- proc macro for varyings
+- accept `IntoIterator<Item = Attribute>` instead of `&[Attribute]`
+- backface culling
+- triangle clipping
 
 __Long term__
 
 - postprocessing example
-- triangle clipping
 - geometry shaders
 - think about data parallelism
