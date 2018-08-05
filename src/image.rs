@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 use std::slice::{Chunks, ChunksMut};
 
-use nalgebra::{Vector2, Vector4};
+use nalgebra::{Vector1, Vector2, Vector4};
 use num::{Zero, Num};
 
 use math;
@@ -250,5 +250,25 @@ impl<T: ColorData> Pixel for Depth<T> {
     fn from_slice_mut(slice: &mut [T]) -> &mut Self {
         assert_eq!(slice.len(), 1);
         unsafe { &mut *(slice.as_mut_ptr() as *mut Depth<T>) }
+    }
+}
+
+impl<T: ColorData + 'static> From<Vector1<T>> for Depth<T> {
+    fn from(depth: Vector1<T>) -> Depth<T> {
+        Depth {
+            data: [depth.x],
+        }
+    }
+}
+
+// Orphan rules T_T
+impl<T, U> Into<Vector1<T>> for Depth<U>
+where
+    T: ColorData + 'static,
+    U: Into<T> + ColorData + 'static,
+{
+    fn into(self) -> Vector1<T> {
+        let [depth] = self.data;
+        Vector1::new(depth.into())
     }
 }
