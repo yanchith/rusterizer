@@ -17,6 +17,7 @@ impl<S: ShaderProgram> Pipeline<S> {
 
     pub fn triangles(
         &self,
+        // TODO: Consider IntoIterator<Item = S::Attribute> instead of slice
         buffer: &[S::Attribute],
         image_color: &mut RgbaImage<u8>,
         image_depth: &mut DepthImage<f64>,
