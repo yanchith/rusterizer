@@ -12,7 +12,7 @@ use std::io::BufReader;
 
 use failure::Error;
 use image::{imageops, ImageBuffer, ImageFormat};
-use nalgebra::{Matrix4, Vector2, Vector3, Vector4};
+use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
 use wavefront_obj::obj::{self, ObjSet, Object, Primitive};
 
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
@@ -68,6 +68,7 @@ impl Smooth for Varying {
 
 struct SimpleProgram {
     u_proj: Matrix4<f64>,
+    u_view: Matrix4<f64>,
     u_light_dir: Vector3<f64>,
     u_tex: RgbaImage<u8>,
 }
@@ -75,11 +76,13 @@ struct SimpleProgram {
 impl SimpleProgram {
     pub fn with_uniforms(
         proj: Matrix4<f64>,
+        view: Matrix4<f64>,
         light_dir: Vector3<f64>,
         tex: RgbaImage<u8>,
     ) -> SimpleProgram {
         SimpleProgram {
             u_proj: proj,
+            u_view: view,
             u_light_dir: light_dir,
             u_tex: tex,
         }
@@ -102,7 +105,7 @@ impl ShaderProgram for SimpleProgram {
         var.uv = attr.uv;
         var.light_intensity = light_intensity;
 
-        self.u_proj * attr.pos
+        self.u_proj * self.u_view * attr.pos
     }
 
     fn fragment(
@@ -130,7 +133,7 @@ fn main() -> Result<(), Error> {
         },
     );
     let mut depth_image =
-        DepthImage::from_pixel(WIDTH, HEIGHT, Depth { data: [-1.0] });
+        DepthImage::from_pixel(WIDTH, HEIGHT, Depth { data: [1.0] });
 
     let texture_file = File::open(tex_path)?;
     let texture_reader = BufReader::new(texture_file);
@@ -145,19 +148,23 @@ fn main() -> Result<(), Error> {
 
     let tex_width = texture.width();
     let tex_height = texture.height();
+
+    let proj = Matrix4::new_perspective(
+        tex_width as f64 / tex_height as f64,
+        PI / 4.0,
+        0.1,
+        10.0,
+    );
+
+    let view = Matrix4::look_at_rh(
+        &Point3::new(0.0, 0.0, 3.0),
+        &Point3::new(0.0, 0.0, 0.0),
+        &Vector3::new(0.0, 1.0, 0.0),
+    );
+
     let pipeline = Pipeline::new(SimpleProgram::with_uniforms(
-        Matrix4::new(
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-            0.0, 0.0, -1.0 / 5.0, 1.0,
-        ),
-        // Matrix4::new_perspective(
-        //     tex_width as f64 / tex_height as f64,
-        //     PI / 4.0,
-        //     0.001,
-        //     1000.0,
-        // ),
+        proj,
+        view,
         Vector3::new(0.0, 0.0, 1.0),
         RgbaImage::from_raw(texture.into_raw(), tex_width, tex_height).unwrap(),
     ));
@@ -165,8 +172,7 @@ fn main() -> Result<(), Error> {
     pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
 
     let out_depth_image = ImageBuffer::from_fn(WIDTH, HEIGHT, |x, y| {
-        let depth = depth_image.pixel(x, y).data[0] * 0.5 + 0.5;
-        image::Luma([(depth * 255.0) as u8])
+        image::Luma([(depth_image.pixel(x, y).data[0] * 255.0) as u8])
     });
 
     let out_color_image = ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(

@@ -1,4 +1,4 @@
-use std::{f64, mem};
+use std::f64;
 
 use image::{Depth, DepthImage, Rgba, RgbaImage};
 use nalgebra::{U2, Vector2, Vector3, Vector4};
@@ -39,6 +39,8 @@ impl<S: ShaderProgram> Pipeline<S> {
             let world_c = self.shader.vertex(&buffer[attr + 2], &mut vc);
 
             // TODO: backface culling
+            // TODO: clipping
+            // TODO: viewport transform
 
             let screen_a = world_to_screen(
                 from_homogenous(world_a),
@@ -61,40 +63,6 @@ impl<S: ShaderProgram> Pipeline<S> {
                 image_depth,
                 (&screen_a, &screen_b, &screen_c),
                 (&va, &vb, &vc),
-            );
-        }
-    }
-
-    pub fn lines(
-        &self,
-        buffer: &[S::Attribute],
-        image_color: &mut RgbaImage<u8>,
-    ) {
-        let width = image_color.width();
-        let height = image_color.height();
-        let half_width = f64::from(width / 2);
-        let half_height = f64::from(height / 2);
-
-        let mut va = S::Varying::default();
-        let mut vb = S::Varying::default();
-
-        for i in 0..buffer.len() / 2 {
-            let attr = i * 2;
-
-            let world_a = self.shader.vertex(&buffer[attr], &mut va);
-            let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
-
-            let screen_a = world_to_screen(world_a, half_width, half_height);
-            let screen_b = world_to_screen(world_b, half_width, half_height);
-
-            line(
-                image_color,
-                // TODO: interpolate color
-                Rgba { data: [255; 4] },
-                screen_a.x as i32,
-                screen_a.y as i32,
-                screen_b.x as i32,
-                screen_b.y as i32,
             );
         }
     }
@@ -125,11 +93,16 @@ impl<S: ShaderProgram> Pipeline<S> {
                         continue;
                     }
 
-                    let f_pos = Vector4::interpolate(a, b, c, &bc);
+                    let mut f_pos = Vector4::interpolate(a, b, c, &bc);
                     let f_var = S::Varying::interpolate(va, vb, vc, &bc);
+
+                    // Remap NDC depth to [0..1]
+                    f_pos.z = f_pos.z / 2.0 + 0.5;
+
                     let f_depth = Depth { data: [f_pos.z] };
 
-                    if image_depth.pixel(x, y) < &f_depth {
+                    // GL_LESS
+                    if &f_depth < image_depth.pixel(x, y) {
                         let f_color = self.shader.fragment(&f_pos, &f_var);
                         image_depth.set_pixel(x, y, f_depth);
                         image_color.set_pixel(x, y, vec_to_rgba(f_color));
@@ -186,48 +159,6 @@ fn barycentric(
     }
 }
 
-/// Draw a line from src to dst using Bresenham's Algorithm
-fn line(
-    image: &mut RgbaImage<u8>,
-    color: Rgba<u8>,
-    mut src_x: i32,
-    mut src_y: i32,
-    mut dst_x: i32,
-    mut dst_y: i32,
-) {
-    let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
-    if transposed {
-        mem::swap(&mut src_x, &mut src_y);
-        mem::swap(&mut dst_x, &mut dst_y);
-    }
-
-    if src_x > dst_x {
-        mem::swap(&mut src_x, &mut dst_x);
-        mem::swap(&mut src_y, &mut dst_y);
-    }
-
-    let dx = dst_x - src_x;
-    let dy = dst_y - src_y;
-
-    let derror2 = i32::abs(dy) * 2;
-    let mut error2 = 0;
-
-    let mut y = src_y;
-    for x in src_x..=dst_x {
-        if transposed {
-            image.set_pixel(y as u32, x as u32, color);
-        } else {
-            image.set_pixel(x as u32, y as u32, color);
-        }
-
-        error2 += derror2;
-        if error2 > dx {
-            y += if src_y > dst_y { -1 } else { 1 };
-            error2 -= dx * 2;
-        }
-    }
-}
-
 fn vec_to_rgba(color: Vector4<f64>) -> Rgba<u8> {
     Rgba {
         data: [
@@ -247,11 +178,87 @@ fn world_to_screen(
     Vector4::new(
         (world_coords.x + 1.0) * half_width,
         (world_coords.y + 1.0) * half_height,
-        world_coords.z,
+        math::clamp(world_coords.z, -1.0, 1.0),
         world_coords.w,
     )
 }
 
 fn from_homogenous(vec: Vector4<f64>) -> Vector4<f64> {
-    Vector4::new(vec.x / vec.w, vec.y / vec.w, vec.z / vec.w, 1.0)
+    Vector4::new(vec.x / vec.w, vec.y / vec.w, vec.z / vec.w, 1.0 / vec.w)
 }
+
+// pub fn lines(
+//     &self,
+//     buffer: &[S::Attribute],
+//     image_color: &mut RgbaImage<u8>,
+// ) {
+//     let width = image_color.width();
+//     let height = image_color.height();
+//     let half_width = f64::from(width / 2);
+//     let half_height = f64::from(height / 2);
+
+//     let mut va = S::Varying::default();
+//     let mut vb = S::Varying::default();
+
+//     for i in 0..buffer.len() / 2 {
+//         let attr = i * 2;
+
+//         let world_a = self.shader.vertex(&buffer[attr], &mut va);
+//         let world_b = self.shader.vertex(&buffer[attr + 1], &mut vb);
+
+//         let screen_a = world_to_screen(world_a, half_width, half_height);
+//         let screen_b = world_to_screen(world_b, half_width, half_height);
+
+//         line(
+//             image_color,
+//             // TODO: interpolate color
+//             Rgba { data: [255; 4] },
+//             screen_a.x as i32,
+//             screen_a.y as i32,
+//             screen_b.x as i32,
+//             screen_b.y as i32,
+//         );
+//     }
+// }
+
+// /// Draw a line from src to dst using Bresenham's Algorithm
+// fn line(
+//     image: &mut RgbaImage<u8>,
+//     color: Rgba<u8>,
+//     mut src_x: i32,
+//     mut src_y: i32,
+//     mut dst_x: i32,
+//     mut dst_y: i32,
+// ) {
+//     let transposed = (dst_x - src_x).abs() < (dst_y - src_y).abs();
+//     if transposed {
+//         mem::swap(&mut src_x, &mut src_y);
+//         mem::swap(&mut dst_x, &mut dst_y);
+//     }
+
+//     if src_x > dst_x {
+//         mem::swap(&mut src_x, &mut dst_x);
+//         mem::swap(&mut src_y, &mut dst_y);
+//     }
+
+//     let dx = dst_x - src_x;
+//     let dy = dst_y - src_y;
+
+//     let derror2 = i32::abs(dy) * 2;
+//     let mut error2 = 0;
+
+//     let mut y = src_y;
+//     for x in src_x..=dst_x {
+//         if transposed {
+//             image.set_pixel(y as u32, x as u32, color);
+//         } else {
+//             image.set_pixel(x as u32, y as u32, color);
+//         }
+
+//         error2 += derror2;
+//         if error2 > dx {
+//             y += if src_y > dst_y { -1 } else { 1 };
+//             error2 -= dx * 2;
+//         }
+//     }
+// }
