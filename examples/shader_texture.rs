@@ -146,11 +146,8 @@ fn main() -> Result<(), Error> {
 
     let attributes = collect_attributes(model);
 
-    let tex_width = texture.width();
-    let tex_height = texture.height();
-
     let proj = Matrix4::new_perspective(
-        tex_width as f64 / tex_height as f64,
+        WIDTH as f64 / HEIGHT as f64,
         PI / 4.0,
         0.1,
         10.0,
@@ -162,6 +159,8 @@ fn main() -> Result<(), Error> {
         &Vector3::new(0.0, 1.0, 0.0),
     );
 
+    let tex_width = texture.width();
+    let tex_height = texture.height();
     let pipeline = Pipeline::new(SimpleProgram::with_uniforms(
         proj,
         view,
