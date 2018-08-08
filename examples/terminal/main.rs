@@ -176,8 +176,8 @@ fn render(image: &RgbaImage<u8>) -> String {
 
     for i in 0..row_count {
         for j in 0..row_length {
-            let bottom = image.pixel(j, 2 * i);
-            let top = image.pixel(j, 2 * i + 1);
+            let top = image.pixel(j, 2 * i);
+            let bottom = image.pixel(j, 2 * i + 1);
             // Unicode UPPER HALF BLOCK with foreground (top) and background
             // (bottom) color
             let [tr, tg, tb, _] = top.data;
