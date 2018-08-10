@@ -153,6 +153,16 @@ impl<P: Pixel + Copy> Image<P> {
     }
 }
 
+impl<T, P> AsRef<[T]> for Image<P>
+where
+    T: ColorData,
+    P: Pixel<ColorChannel = T>,
+{
+    fn as_ref(&self) -> &[T] {
+        &self.buffer
+    }
+}
+
 pub struct Pixels<'a, P>
 where
     P: Pixel + 'a,
