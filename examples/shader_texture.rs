@@ -16,11 +16,20 @@ use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
 use wavefront_obj::obj::{self, ObjSet, Object, Primitive};
 
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
-use rusterizer::pipeline::Pipeline;
 use rusterizer::shader::{ShaderProgram, Smooth};
 
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 800;
+const WIDTH: u32 = 400;
+const HEIGHT: u32 = 400;
+
+fn black() -> Rgba<u8> {
+    Rgba {
+        data: [0, 0, 0, 255],
+    }
+}
+
+fn depth() -> Depth<f64> {
+    Depth { data: [1.0] }
+}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Attribute {
@@ -125,15 +134,8 @@ fn main() -> Result<(), Error> {
     let model_path = args.next().expect("USAGE: prog modelpath texpath");
     let tex_path = args.next().expect("USAGE: prog modelpath texpath");
 
-    let mut color_image = RgbaImage::from_pixel(
-        WIDTH,
-        HEIGHT,
-        Rgba {
-            data: [0, 0, 0, 255],
-        },
-    );
-    let mut depth_image =
-        DepthImage::from_pixel(WIDTH, HEIGHT, Depth { data: [1.0] });
+    let mut color_image = RgbaImage::from_pixel(WIDTH, HEIGHT, black());
+    let mut depth_image = DepthImage::from_pixel(WIDTH, HEIGHT, depth());
 
     let texture_file = File::open(tex_path)?;
     let texture_reader = BufReader::new(texture_file);
@@ -161,14 +163,19 @@ fn main() -> Result<(), Error> {
 
     let tex_width = texture.width();
     let tex_height = texture.height();
-    let pipeline = Pipeline::new(SimpleProgram::with_uniforms(
+    let shader = SimpleProgram::with_uniforms(
         proj,
         view,
         Vector3::new(0.0, 0.0, 1.0),
         RgbaImage::from_raw(texture.into_raw(), tex_width, tex_height).unwrap(),
-    ));
+    );
 
-    pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
+    rusterizer::triangles(
+        &shader,
+        &attributes,
+        &mut color_image,
+        &mut depth_image,
+    );
 
     let out_depth_image = ImageBuffer::from_fn(WIDTH, HEIGHT, |x, y| {
         image::Luma([(depth_image.pixel(x, y).data[0] * 255.0) as u8])

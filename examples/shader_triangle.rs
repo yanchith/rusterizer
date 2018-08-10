@@ -10,11 +10,10 @@ use image::{imageops, ImageBuffer};
 use nalgebra::{Vector3, Vector4};
 
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
-use rusterizer::pipeline::Pipeline;
 use rusterizer::shader::{ShaderProgram, Smooth};
 
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 800;
+const WIDTH: u32 = 400;
+const HEIGHT: u32 = 400;
 
 fn black() -> Rgba<u8> {
     Rgba {
@@ -23,7 +22,7 @@ fn black() -> Rgba<u8> {
 }
 
 fn depth() -> Depth<f64> {
-    Depth { data: [-1.0] }
+    Depth { data: [1.0] }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -101,9 +100,12 @@ fn main() -> Result<(), Error> {
         },
     ];
 
-    let pipeline = Pipeline::new(SimpleProgram);
-
-    pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
+    rusterizer::triangles(
+        &SimpleProgram,
+        &attributes,
+        &mut color_image,
+        &mut depth_image,
+    );
 
     let out_color_image = ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
         WIDTH,

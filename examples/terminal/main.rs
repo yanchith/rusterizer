@@ -7,11 +7,12 @@ extern crate wavefront_obj;
 use std::env;
 use std::f64;
 use std::f64::consts::PI;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use failure::Error;
 use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
-use rusterizer::pipeline::Pipeline;
 use rusterizer::shader::{ShaderProgram, Smooth};
 
 mod attr;
@@ -19,6 +20,16 @@ mod loader;
 
 const WIDTH: u32 = 80;
 const HEIGHT: u32 = 80;
+
+fn black() -> Rgba<u8> {
+    Rgba {
+        data: [0, 0, 0, 255],
+    }
+}
+
+fn depth() -> Depth<f64> {
+    Depth { data: [1.0] }
+}
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Varying {
@@ -78,6 +89,10 @@ impl SimpleProgram {
             u_tex: tex,
         }
     }
+
+    pub fn set_view(&mut self, view: Matrix4<f64>) {
+        self.u_view = view;
+    }
 }
 
 impl ShaderProgram for SimpleProgram {
@@ -116,15 +131,8 @@ fn main() -> Result<(), Error> {
     let model_path = args.next().expect("USAGE: prog modelpath texpath");
     let tex_path = args.next().expect("USAGE: prog modelpath texpath");
 
-    let mut color_image = RgbaImage::from_pixel(
-        WIDTH,
-        HEIGHT,
-        Rgba {
-            data: [0, 0, 0, 255],
-        },
-    );
-    let mut depth_image =
-        DepthImage::from_pixel(WIDTH, HEIGHT, Depth { data: [1.0] });
+    let mut color_image = RgbaImage::from_pixel(WIDTH, HEIGHT, black());
+    let mut depth_image = DepthImage::from_pixel(WIDTH, HEIGHT, depth());
 
     let texture = loader::load_image(&tex_path)?;
     let attributes = loader::load_model(&model_path)?;
@@ -142,24 +150,73 @@ fn main() -> Result<(), Error> {
         &Vector3::new(0.0, 1.0, 0.0),
     );
 
-    let pipeline = Pipeline::new(SimpleProgram::with_uniforms(
+    let mut shader = SimpleProgram::with_uniforms(
         proj,
         view,
         Vector3::new(0.0, 0.0, 1.0),
         texture,
-    ));
+    );
 
-    pipeline.triangles(&attributes, &mut color_image, &mut depth_image);
+    let mut first_frame = true;
+    let start_time = Instant::now();
+    let frame_duration = Duration::from_millis(33);
 
-    let output = render(&color_image);
+    loop {
+        let total_duration = start_time.elapsed();
+        let frame_start_time = Instant::now();
 
-    // Hide cursor while printing canvas to avoid flickering
-    print!("\x1B[?25l{}\x1B[?25h\n", output);
+        let t = total_duration.as_secs() as f64
+            + total_duration.subsec_millis() as f64 / 1000.0;
+        let view = Matrix4::look_at_rh(
+            &Point3::new(3.0 * t.sin(), 0.0, 3.0 * t.cos()),
+            &Point3::new(0.0, 0.0, 0.0),
+            &Vector3::new(0.0, 1.0, 0.0),
+        );
 
-    // Move cursor up to enable drawing of next frame over the current one
-    print!("\x1B[{}A", HEIGHT / 2);
+        shader.set_view(view);
 
-    Ok(())
+        color_image.clear(black());
+        depth_image.clear(depth());
+        rusterizer::triangles(
+            &shader,
+            &attributes,
+            &mut color_image,
+            &mut depth_image,
+        );
+
+        let output = render(&color_image);
+
+        let draw_duration = frame_start_time.elapsed();
+
+        // Print output to screen.
+        // 0) If not first frame, move cursor back up `\x1B[{}A`
+        // 1) Hide cursor `\x1B[?25l`
+        // 2) Print our output
+        // 3) Print our text
+        // 4) Show cursor `\x1B[?25h`
+        if first_frame {
+            print!(
+                "\x1B[?25l{}\nframe time {:?}\x1B[?25h",
+                output, draw_duration,
+            );
+            first_frame = false;
+        } else {
+            print!(
+                "\x1B[{}A\x1B[?25l{}\nframe time {:?}\x1B[?25h",
+                HEIGHT / 2,
+                output,
+                draw_duration,
+            );
+        }
+
+        // Try to sleep for the remainder of the frame
+        let sleep_duration = frame_duration.checked_sub(draw_duration);
+
+        // If some, duration is not negative
+        if let Some(duration) = sleep_duration {
+            thread::sleep(duration);
+        }
+    }
 }
 
 /// Returns a string that, when printed to the terminal, renders the given image.
@@ -176,8 +233,11 @@ fn render(image: &RgbaImage<u8>) -> String {
 
     for i in 0..row_count {
         for j in 0..row_length {
-            let top = image.pixel(j, 2 * i);
-            let bottom = image.pixel(j, 2 * i + 1);
+            let ytop = image.height() - 1 - 2 * i;
+            let ybottom = image.height() - 2 - 2 * i;
+            let top = image.pixel(j, ytop);
+            let bottom = image.pixel(j, ybottom);
+
             // Unicode UPPER HALF BLOCK with foreground (top) and background
             // (bottom) color
             let [tr, tg, tb, _] = top.data;
@@ -192,11 +252,12 @@ fn render(image: &RgbaImage<u8>) -> String {
 
         let last_line = i == row_count - 1;
 
-        // Always reset on the last line to restore foreground color
         if last_line {
+            // Reset back to foreground color
             output.push_str("\x1B[m");
         } else {
-            output.push_str("\n");
+            // Reset back to foreground color and add new line
+            output.push_str("\x1B[m\n");
         }
     }
 
