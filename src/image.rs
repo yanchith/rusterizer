@@ -134,6 +134,12 @@ impl<P: Pixel + Copy> Image<P> {
         *self.pixel_mut(x, y) = pixel;
     }
 
+    pub fn clear(&mut self, pixel: P) {
+        for p in self.pixels_mut() {
+            *p = pixel;
+        }
+    }
+
     pub fn dimensions(&self) -> (u32, u32) {
         (self.width as u32, self.height as u32)
     }
