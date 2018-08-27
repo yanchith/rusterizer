@@ -160,6 +160,7 @@ fn main() -> Result<(), Error> {
         texture,
     );
 
+    let mut window_image = Vec::with_capacity(WIDTH as usize * HEIGHT as usize);
     let mut window = Window::new(
         "Rusterizer",
         WIDTH as usize,
@@ -193,27 +194,35 @@ fn main() -> Result<(), Error> {
             &mut depth_image,
         );
 
-        // minfb is in BGRA format, our image is RGBA; do some shuffling
-        let b: Vec<u32> = color_image
+        // Two things happen here:
+        // - minifb is B8G8R8A8, our image is R32G32B32A32; do some shuffling
+        // - the rasterized image is flipped vertically, we draw its lines in
+        //   reverse to counteract
+        let pixel_iter = color_image
             .as_ref()
-            .chunks(4)
-            .map(|chunk| {
-                let mut color = 0u32;
-                // B
-                color |= u32::from(chunk[2]);
-                // G
-                color |= u32::from(chunk[1]) << 8;
-                // R
-                color |= u32::from(chunk[0]) << 16;
-                // A
-                color |= u32::from(chunk[3]) << 24;
-                color
-            })
-            .collect();
+            .chunks(color_image.width() as usize * 4)
+            .rev()
+            .flat_map(|line| {
+                line.chunks(4).map(|chunk| {
+                    let mut color = 0u32;
+                    // B
+                    color |= u32::from(chunk[2]);
+                    // G
+                    color |= u32::from(chunk[1]) << 8;
+                    // R
+                    color |= u32::from(chunk[0]) << 16;
+                    // A
+                    color |= u32::from(chunk[3]) << 24;
+                    color
+                })
+            });
 
-        window.update_with_buffer(&b).unwrap();
+        window_image.clear();
+        window_image.extend(pixel_iter);
+        window.update_with_buffer(&window_image).unwrap();
 
         let draw_duration = frame_start_time.elapsed();
+        println!("frame time: {:?}", draw_duration);
 
         // Try to sleep for the remainder of the frame
         let sleep_duration = frame_duration.checked_sub(draw_duration);
