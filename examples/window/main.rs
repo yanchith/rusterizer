@@ -193,14 +193,19 @@ fn main() -> Result<(), Error> {
             &mut depth_image,
         );
 
+        // minfb is in BGRA format, our image is RGBA; do some shuffling
         let b: Vec<u32> = color_image
             .as_ref()
             .chunks(4)
             .map(|chunk| {
                 let mut color = 0u32;
-                color |= u32::from(chunk[0]);
+                // B
+                color |= u32::from(chunk[2]);
+                // G
                 color |= u32::from(chunk[1]) << 8;
-                color |= u32::from(chunk[2]) << 16;
+                // R
+                color |= u32::from(chunk[0]) << 16;
+                // A
                 color |= u32::from(chunk[3]) << 24;
                 color
             })
