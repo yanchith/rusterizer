@@ -15,6 +15,7 @@ use std::u32;
 use failure::Error;
 use minifb::{Window, WindowOptions};
 use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
+use rusterizer::Pipeline;
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
 use rusterizer::shader::{ShaderProgram, Smooth};
 
@@ -168,6 +169,8 @@ fn main() -> Result<(), Error> {
         WindowOptions::default(),
     ).unwrap();
 
+    let pipeline = Pipeline::new();
+
     let start_time = Instant::now();
     let frame_duration = Duration::from_millis(33);
 
@@ -187,7 +190,7 @@ fn main() -> Result<(), Error> {
 
         color_image.clear(black());
         depth_image.clear(depth());
-        rusterizer::triangles(
+        pipeline.triangles(
             &shader,
             &attributes,
             &mut color_image,
@@ -195,7 +198,7 @@ fn main() -> Result<(), Error> {
         );
 
         // Two things happen here:
-        // - minifb is B8G8R8A8, our image is R32G32B32A32; do some shuffling
+        // - minifb is BGRA, our image is RGBA; do some shuffling
         // - the rasterized image is flipped vertically, we draw its lines in
         //   reverse to counteract
         let pixel_iter = color_image

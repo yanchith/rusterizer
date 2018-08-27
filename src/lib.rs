@@ -9,104 +9,162 @@ mod math;
 use std::f64;
 
 use image::{Depth, DepthImage, Rgba, RgbaImage};
-use nalgebra::{U2, Vector2, Vector3, Vector4};
+use nalgebra::{U2, U3, Vector2, Vector3, Vector4};
 
 use shader::{ShaderProgram, Smooth};
 
-pub fn triangles<S: ShaderProgram>(
-    shader: &S,
-    // TODO: Consider IntoIterator<Item = S::Attribute> instead of slice
-    buffer: &[S::Attribute],
-    image_color: &mut RgbaImage<u8>,
-    image_depth: &mut DepthImage<f64>,
-) {
-    let width = image_color.width();
-    let height = image_color.height();
-    let half_width = f64::from(width / 2);
-    let half_height = f64::from(height / 2);
-
-    let mut va = S::Varying::default();
-    let mut vb = S::Varying::default();
-    let mut vc = S::Varying::default();
-
-    for i in 0..buffer.len() / 3 {
-        let attr = i * 3;
-
-        let world_a = shader.vertex(&buffer[attr], &mut va);
-        let world_b = shader.vertex(&buffer[attr + 1], &mut vb);
-        let world_c = shader.vertex(&buffer[attr + 2], &mut vc);
-
-        // TODO: backface culling
-        // TODO: clipping
-        // TODO: viewport transform
-
-        let screen_a =
-            world_to_screen(from_homogenous(world_a), half_width, half_height);
-        let screen_b =
-            world_to_screen(from_homogenous(world_b), half_width, half_height);
-        let screen_c =
-            world_to_screen(from_homogenous(world_c), half_width, half_height);
-
-        triangle(
-            shader,
-            image_color,
-            image_depth,
-            (&screen_a, &screen_b, &screen_c),
-            (&va, &vb, &vc),
-        );
-    }
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum CullFace {
+    Front,
+    Back,
+    FrontAndBack,
 }
 
-/// Writes a triangle to image and z_buffer.
-fn triangle<S: ShaderProgram>(
-    shader: &S,
-    image_color: &mut RgbaImage<u8>,
-    image_depth: &mut DepthImage<f64>,
-    (a, b, c): (&Vector4<f64>, &Vector4<f64>, &Vector4<f64>),
-    (va, vb, vc): (&S::Varying, &S::Varying, &S::Varying),
-) {
-    let width = image_color.width();
-    let height = image_color.height();
+pub struct Pipeline {
+    cull_face: Option<CullFace>,
+}
 
-    // TODO: don't clone, find a way to solve VectorSlice2 type error
-    let a2 = a.fixed_rows::<U2>(0).clone_owned();
-    let b2 = b.fixed_rows::<U2>(0).clone_owned();
-    let c2 = c.fixed_rows::<U2>(0).clone_owned();
+impl Pipeline {
+    pub fn new() -> Pipeline {
+        Pipeline {
+            cull_face: Some(CullFace::Back),
+            // cull_face: None,
+        }
+    }
 
-    let (topleft, bottomright) = bounding_box(a2, b2, c2, width, height);
+    pub fn triangles<S: ShaderProgram>(
+        &self,
+        shader: &S,
+        // TODO: Consider IntoIterator<Item = S::Attribute> instead of slice
+        buffer: &[S::Attribute],
+        image_color: &mut RgbaImage<u8>,
+        image_depth: &mut DepthImage<f64>,
+    ) {
+        let width = image_color.width();
+        let height = image_color.height();
+        let half_width = f64::from(width / 2);
+        let half_height = f64::from(height / 2);
 
-    for x in topleft.x..=bottomright.x {
-        for y in topleft.y..=bottomright.y {
-            let point = Vector2::new(f64::from(x), f64::from(y));
-            if let Some(bc) = barycentric(a2, b2, c2, point) {
-                if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
-                    continue;
-                }
+        let mut var_a = S::Varying::default();
+        let mut var_b = S::Varying::default();
+        let mut var_c = S::Varying::default();
 
-                let mut f_pos = Vector4::interpolate(a, b, c, &bc);
-                let f_var = S::Varying::interpolate(va, vb, vc, &bc);
+        for i in 0..buffer.len() / 3 {
+            let attr = i * 3;
 
-                // Remap NDC depth to [0..1]
-                f_pos.z = f_pos.z / 2.0 + 0.5;
+            let world_a = shader.vertex(&buffer[attr], &mut var_a);
+            let world_b = shader.vertex(&buffer[attr + 1], &mut var_b);
+            let world_c = shader.vertex(&buffer[attr + 2], &mut var_c);
 
-                let f_depth = Depth { data: [f_pos.z] };
+            if let Some(cull_face) = self.cull_face {
+                let normal = face_normal(
+                    &world_a.fixed_rows::<U3>(0).clone_owned(),
+                    &world_b.fixed_rows::<U3>(0).clone_owned(),
+                    &world_c.fixed_rows::<U3>(0).clone_owned(),
+                );
 
-                // GL_LESS
-                if &f_depth < image_depth.pixel(x, y) {
-                    let f_color = shader.fragment(&f_pos, &f_var);
-                    image_depth.set_pixel(x, y, f_depth);
-                    image_color.set_pixel(x, y, vec_to_rgba(f_color));
+                let do_cull = match cull_face {
+                    CullFace::FrontAndBack => true,
+                    CullFace::Front if normal.z > 0.0 => true,
+                    CullFace::Back if normal.z < 0.0 => true,
+                    _ => false,
+                };
+
+                if do_cull { continue; }
+            }
+
+            // TODO: clipping
+            // TODO: viewport transform
+
+            let screen_a = world_to_screen(
+                from_homogenous(world_a),
+                half_width,
+                half_height,
+            );
+            let screen_b = world_to_screen(
+                from_homogenous(world_b),
+                half_width,
+                half_height,
+            );
+            let screen_c = world_to_screen(
+                from_homogenous(world_c),
+                half_width,
+                half_height,
+            );
+
+            self.triangle(
+                shader,
+                image_color,
+                image_depth,
+                (&screen_a, &screen_b, &screen_c),
+                (&var_a, &var_b, &var_c),
+            );
+        }
+    }
+
+    /// Writes a triangle to image and z_buffer.
+    fn triangle<S: ShaderProgram>(
+        &self,
+        shader: &S,
+        image_color: &mut RgbaImage<u8>,
+        image_depth: &mut DepthImage<f64>,
+        (a, b, c): (&Vector4<f64>, &Vector4<f64>, &Vector4<f64>),
+        (va, vb, vc): (&S::Varying, &S::Varying, &S::Varying),
+    ) {
+        let width = image_color.width();
+        let height = image_color.height();
+
+        // TODO: don't clone, find a way to solve VectorSlice2 type error
+        let a2 = a.fixed_rows::<U2>(0).clone_owned();
+        let b2 = b.fixed_rows::<U2>(0).clone_owned();
+        let c2 = c.fixed_rows::<U2>(0).clone_owned();
+
+        let (topleft, bottomright) = bounding_box(&a2, &b2, &c2, width, height);
+
+        for x in topleft.x..=bottomright.x {
+            for y in topleft.y..=bottomright.y {
+                let point = Vector2::new(f64::from(x), f64::from(y));
+                if let Some(bc) = barycentric(&a2, &b2, &c2, &point) {
+                    if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+                        continue;
+                    }
+
+                    let mut f_pos = Vector4::interpolate(a, b, c, &bc);
+                    let f_var = S::Varying::interpolate(va, vb, vc, &bc);
+
+                    // Remap NDC depth to [0..1]
+                    f_pos.z = f_pos.z / 2.0 + 0.5;
+
+                    let f_depth = Depth { data: [f_pos.z] };
+
+                    // GL_LESS
+                    if &f_depth < image_depth.pixel(x, y) {
+                        let f_color = shader.fragment(&f_pos, &f_var);
+                        image_depth.set_pixel(x, y, f_depth);
+                        image_color.set_pixel(x, y, vec_to_rgba(f_color));
+                    }
                 }
             }
         }
     }
 }
 
-/// Computes a bounding box (in screenspace coords) for triangle A, B, C.
+/// Compute a normal vector for the face A, B, C
+fn face_normal(
+    a: &Vector3<f64>,
+    b: &Vector3<f64>,
+    c: &Vector3<f64>,
+) -> Vector3<f64> {
+    let ab = b - a;
+    let ac = c - a;
+    ab.cross(&ac)
+}
+
+/// Compute a bounding box (in screenspace coords) for triangle A, B, C.
 fn bounding_box(
-    a: Vector2<f64>,
-    b: Vector2<f64>,
-    c: Vector2<f64>,
+    a: &Vector2<f64>,
+    b: &Vector2<f64>,
+    c: &Vector2<f64>,
     width: u32,
     height: u32,
 ) -> (Vector2<u32>, Vector2<u32>) {
@@ -123,13 +181,13 @@ fn bounding_box(
     )
 }
 
-/// Computes barycentric coordinates of point P in triangle A, B, C.
+/// Compute barycentric coordinates of point P in triangle A, B, C.
 /// Returns None for degenerate triangles.
 fn barycentric(
-    a: Vector2<f64>,
-    b: Vector2<f64>,
-    c: Vector2<f64>,
-    p: Vector2<f64>,
+    a: &Vector2<f64>,
+    b: &Vector2<f64>,
+    c: &Vector2<f64>,
+    p: &Vector2<f64>,
 ) -> Option<Vector3<f64>> {
     let ab = b - a;
     let ac = c - a;
@@ -251,4 +309,3 @@ fn from_homogenous(vec: Vector4<f64>) -> Vector4<f64> {
 //         }
 //     }
 // }
-

@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use failure::Error;
 use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
+use rusterizer::Pipeline;
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
 use rusterizer::shader::{ShaderProgram, Smooth};
 
@@ -157,6 +158,8 @@ fn main() -> Result<(), Error> {
         texture,
     );
 
+    let pipeline = Pipeline::new();
+
     let mut first_frame = true;
     let start_time = Instant::now();
     let frame_duration = Duration::from_millis(33);
@@ -177,7 +180,7 @@ fn main() -> Result<(), Error> {
 
         color_image.clear(black());
         depth_image.clear(depth());
-        rusterizer::triangles(
+        pipeline.triangles(
             &shader,
             &attributes,
             &mut color_image,
