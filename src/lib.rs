@@ -28,7 +28,6 @@ impl Pipeline {
     pub fn new() -> Pipeline {
         Pipeline {
             cull_face: Some(CullFace::Back),
-            // cull_face: None,
         }
     }
 
@@ -129,16 +128,14 @@ impl Pipeline {
                         continue;
                     }
 
+                    // Compute frag depth and remap it from NDC to [0..1]
                     let mut f_pos = Vector4::interpolate(a, b, c, &bc);
-                    let f_var = S::Varying::interpolate(va, vb, vc, &bc);
-
-                    // Remap NDC depth to [0..1]
                     f_pos.z = f_pos.z / 2.0 + 0.5;
-
                     let f_depth = Depth { data: [f_pos.z] };
 
                     // GL_LESS
                     if &f_depth < image_depth.pixel(x, y) {
+                        let f_var = S::Varying::interpolate(va, vb, vc, &bc);
                         let f_color = shader.fragment(&f_pos, &f_var);
                         image_depth.set_pixel(x, y, f_depth);
                         image_color.set_pixel(x, y, vec_to_rgba(f_color));
