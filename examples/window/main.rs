@@ -197,27 +197,22 @@ fn main() -> Result<(), Error> {
             &mut depth_image,
         );
 
-        // Two things happen here:
-        // - minifb is BGRA, our image is RGBA; do some shuffling
-        // - the rasterized image is flipped vertically, we draw its lines in
-        //   reverse to counteract
+
+        // minifb buffer expects BGRA, our image is RGBA; do some shuffling
         let pixel_iter = color_image
             .as_ref()
-            .chunks(color_image.width() as usize * 4)
-            .rev()
-            .flat_map(|line| {
-                line.chunks(4).map(|chunk| {
-                    let mut color = 0u32;
-                    // B
-                    color |= u32::from(chunk[2]);
-                    // G
-                    color |= u32::from(chunk[1]) << 8;
-                    // R
-                    color |= u32::from(chunk[0]) << 16;
-                    // A
-                    color |= u32::from(chunk[3]) << 24;
-                    color
-                })
+            .chunks(4)
+            .map(|chunk| {
+                let mut color = 0u32;
+                // B
+                color |= u32::from(chunk[2]);
+                // G
+                color |= u32::from(chunk[1]) << 8;
+                // R
+                color |= u32::from(chunk[0]) << 16;
+                // A
+                color |= u32::from(chunk[3]) << 24;
+                color
             });
 
         window_image.clear();

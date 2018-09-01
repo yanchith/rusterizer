@@ -19,8 +19,8 @@ use rusterizer::shader::{ShaderProgram, Smooth};
 mod attr;
 mod loader;
 
-const WIDTH: u32 = 80;
-const HEIGHT: u32 = 80;
+const WIDTH: u32 = 60;
+const HEIGHT: u32 = 60;
 
 fn black() -> Rgba<u8> {
     Rgba {
@@ -236,10 +236,8 @@ fn render(image: &RgbaImage<u8>) -> String {
 
     for i in 0..row_count {
         for j in 0..row_length {
-            let ytop = image.height() - 1 - 2 * i;
-            let ybottom = image.height() - 2 - 2 * i;
-            let top = image.pixel(j, ytop);
-            let bottom = image.pixel(j, ybottom);
+            let top = image.pixel(j, 2 * i);
+            let bottom = image.pixel(j, 2 * i + 1);
 
             // Unicode UPPER HALF BLOCK with foreground (top) and background
             // (bottom) color

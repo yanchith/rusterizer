@@ -41,6 +41,10 @@ impl Pipeline {
     ) {
         let width = image_color.width();
         let height = image_color.height();
+
+        assert!(width == image_depth.width(), "images must have equal dims");
+        assert!(height == image_depth.height(), "images must have equal dims");
+
         let half_width = f64::from(width / 2);
         let half_height = f64::from(height / 2);
 
@@ -134,11 +138,13 @@ impl Pipeline {
                     let f_depth = Depth { data: [f_pos.z] };
 
                     // GL_LESS
-                    if &f_depth < image_depth.pixel(x, y) {
+                    let flipped_y = height - 1 - y;
+                    if &f_depth < image_depth.pixel(x, flipped_y) {
                         let f_var = S::Varying::interpolate(va, vb, vc, &bc);
                         let f_color = shader.fragment(&f_pos, &f_var);
-                        image_depth.set_pixel(x, y, f_depth);
-                        image_color.set_pixel(x, y, vec_to_rgba(f_color));
+
+                        image_depth.set_pixel(x, flipped_y, f_depth);
+                        image_color.set_pixel(x, flipped_y, vec_to_rgba(f_color));
                     }
                 }
             }
