@@ -20,14 +20,19 @@ pub enum CullFace {
     FrontAndBack,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+pub struct PipelineOptions {
+    pub cull_face: Option<CullFace>,
+}
+
 pub struct Pipeline {
     cull_face: Option<CullFace>,
 }
 
 impl Pipeline {
-    pub fn new() -> Pipeline {
+    pub fn with_options(options: PipelineOptions) -> Pipeline {
         Pipeline {
-            cull_face: Some(CullFace::Back),
+            cull_face: options.cull_face,
         }
     }
 

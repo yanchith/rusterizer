@@ -15,7 +15,7 @@ use std::u32;
 use failure::Error;
 use minifb::{Window, WindowOptions};
 use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
-use rusterizer::Pipeline;
+use rusterizer::{Pipeline, PipelineOptions, CullFace};
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
 use rusterizer::shader::{ShaderProgram, Smooth};
 
@@ -169,7 +169,12 @@ fn main() -> Result<(), Error> {
         WindowOptions::default(),
     ).unwrap();
 
-    let pipeline = Pipeline::new();
+    let pipeline = Pipeline::with_options(
+        PipelineOptions {
+            cull_face: Some(CullFace::Back),
+            .. PipelineOptions::default()
+        }
+    );
 
     let start_time = Instant::now();
     let frame_duration = Duration::from_millis(33);

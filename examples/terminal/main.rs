@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 use failure::Error;
 use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
-use rusterizer::Pipeline;
+use rusterizer::{Pipeline, PipelineOptions, CullFace};
 use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
 use rusterizer::shader::{ShaderProgram, Smooth};
 
@@ -158,7 +158,10 @@ fn main() -> Result<(), Error> {
         texture,
     );
 
-    let pipeline = Pipeline::new();
+    let pipeline = Pipeline::with_options(PipelineOptions {
+        cull_face: Some(CullFace::Back),
+        .. PipelineOptions::default()
+    });
 
     let mut first_frame = true;
     let start_time = Instant::now();
