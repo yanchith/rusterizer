@@ -1,8 +1,4 @@
-extern crate failure;
-extern crate image;
-extern crate nalgebra;
-extern crate rusterizer;
-extern crate wavefront_obj;
+use nalgebra;
 
 use std::env;
 use std::f64;

@@ -4,7 +4,7 @@ use std::slice::{Chunks, ChunksMut};
 use nalgebra::{Vector1, Vector2, Vector4};
 use num::{Zero, Num};
 
-use math;
+use crate::math;
 
 pub type RgbaImage<T> = Image<Rgba<T>>;
 pub type DepthImage<T> = Image<Depth<T>>;
@@ -89,14 +89,14 @@ impl<P: Pixel + Copy> Image<P> {
         self.buffer
     }
 
-    pub fn pixels(&self) -> Pixels<P> {
+    pub fn pixels(&self) -> Pixels<'_, P> {
         let channel_count = P::channel_count() as usize;
         Pixels {
             chunks: self.buffer.chunks(channel_count),
         }
     }
 
-    pub fn pixels_mut(&mut self) -> PixelsMut<P> {
+    pub fn pixels_mut(&mut self) -> PixelsMut<'_, P> {
         let channel_count = P::channel_count() as usize;
         PixelsMut {
             chunks: self.buffer.chunks_mut(channel_count),

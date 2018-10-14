@@ -7,7 +7,7 @@ use nalgebra::{Vector2, Vector3, Vector4};
 use rusterizer::image::RgbaImage;
 use wavefront_obj::obj::{self, ObjSet, Object, Primitive};
 
-use attr::Attribute;
+use crate::attr::Attribute;
 
 pub fn load_image(path: &str) -> Result<RgbaImage<u8>, Error> {
     let texture_file = File::open(path)?;

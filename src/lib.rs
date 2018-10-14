@@ -1,6 +1,3 @@
-extern crate nalgebra;
-extern crate num;
-
 pub mod image;
 pub mod shader;
 
@@ -8,10 +5,10 @@ mod math;
 
 use std::f64;
 
-use image::{Depth, DepthImage, Rgba, RgbaImage};
 use nalgebra::{U2, U3, Vector2, Vector3, Vector4};
 
-use shader::{ShaderProgram, Smooth};
+use crate::image::{Depth, DepthImage, Rgba, RgbaImage};
+use crate::shader::{ShaderProgram, Smooth};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CullFace {
