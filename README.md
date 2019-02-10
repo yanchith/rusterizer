@@ -21,7 +21,26 @@ Run examples with:
 
 __Short term__
 
-- proc macro for varyings
+- `Pixel` as associated type
+- nicer program API
+
+``` rust
+impl ShaderProgram for SimpleProgram {
+    type Attribute = [f32; 3];
+    type Varying = ();
+    type Pixel = [f32; 4];
+
+    fn vert(&self) -> ([f32; 4], Self::Varying) {
+        // ...
+    }
+
+    fn frag(&self, varying: &Self::Varying) -> Self::Pixel {
+        // ...
+    }
+}
+```
+
+- proc macro derive for Varying
 - polish nalgebra interop (From/Into impls)
   * float normalization in From/Into impls?
   * float normalization in image?
