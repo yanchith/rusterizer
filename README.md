@@ -21,8 +21,10 @@ Run examples with:
 
 __Short term__
 
-- `Pixel` as associated type
-- nicer program API
+- Take inspiration from `euc`
+  * `interpolate` doesn't need to take in the barycentric coordinates as a Vec3
+  * `Pixel` as associated type
+  * A generic render target
 
 ``` rust
 impl ShaderProgram for SimpleProgram {
@@ -40,12 +42,10 @@ impl ShaderProgram for SimpleProgram {
 }
 ```
 
-- proc macro derive for Varying
+- proc macro derive for `Smooth`
 - polish nalgebra interop (From/Into impls)
   * float normalization in From/Into impls?
   * float normalization in image?
-- use nalgebra_glm?
-- accept `IntoIterator<Item = Attribute>` instead of `&[Attribute]`
 - triangle clipping
 
 __Long term__
