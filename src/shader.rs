@@ -9,23 +9,14 @@ pub trait ShaderProgram {
     type Varying: Default + Smooth;
     // type Fragment;
 
-    fn vertex(
-        &self,
-        attribute: &Self::Attribute,
-        varying: &mut Self::Varying,
-    ) -> Vector4<f64>;
+    fn vertex(&self, attribute: &Self::Attribute, varying: &mut Self::Varying) -> Vector4<f64>;
 
-    fn fragment(
-        &self,
-        position: &Vector4<f64>,
-        varying: &Self::Varying,
-    ) -> Vector4<f64>;
+    fn fragment(&self, position: &Vector4<f64>, varying: &Self::Varying) -> Vector4<f64>;
 }
 
 impl Smooth for f32 {
     fn interpolate(a: &f32, b: &f32, c: &f32, bc: &Vector3<f64>) -> f32 {
-        (f64::from(*a) * bc.x + f64::from(*b) * bc.y + f64::from(*c) * bc.z)
-            as f32
+        (f64::from(*a) * bc.x + f64::from(*b) * bc.y + f64::from(*c) * bc.z) as f32
     }
 }
 
@@ -123,8 +114,4 @@ impl Smooth for Vector4<f64> {
             f64::interpolate(&a.w, &b.w, &c.w, bc),
         )
     }
-}
-
-impl Smooth for () {
-    fn interpolate(_: &(), _: &(), _: &(), _: &Vector3<f64>) -> () {}
 }

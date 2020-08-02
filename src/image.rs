@@ -1,15 +1,15 @@
 use std::fmt::Debug;
+use std::mem;
 use std::slice::{Chunks, ChunksMut};
 
 use nalgebra::{Vector1, Vector2, Vector4};
-use num::{Zero, Num};
 
 use crate::math;
 
 pub type RgbaImage<T> = Image<Rgba<T>>;
 pub type DepthImage<T> = Image<Depth<T>>;
 
-pub trait ColorData: Num + Copy + Clone + Debug {}
+pub trait ColorData: PartialEq + Copy + Clone + Debug {}
 
 impl ColorData for usize {}
 impl ColorData for u8 {}
@@ -28,7 +28,7 @@ impl ColorData for i128 {}
 impl ColorData for f32 {}
 impl ColorData for f64 {}
 
-pub trait Pixel {
+pub trait Pixel: Copy {
     type ColorChannel: ColorData;
     fn channel_count() -> u8;
     fn from_slice(slice: &[Self::ColorChannel]) -> &Self;
@@ -42,15 +42,20 @@ pub struct Image<P: Pixel> {
     buffer: Vec<P::ColorChannel>,
 }
 
-impl<P: Pixel + Copy> Image<P> {
+impl<P: Pixel> Image<P> {
     pub fn new(width: u32, height: u32) -> Image<P> {
         let w = width as usize;
         let h = height as usize;
         let c = P::channel_count() as usize;
+        // SAFETY: This is only safe because we only implement ColorData for the
+        // numeric primitive types, which all do have a valid zeroed
+        // representation.
+        let zero: P::ColorChannel = unsafe { mem::zeroed() };
+
         Image {
             width: w,
             height: h,
-            buffer: vec![Zero::zero(); w * h * c],
+            buffer: vec![zero; w * h * c],
         }
     }
 
@@ -62,11 +67,7 @@ impl<P: Pixel + Copy> Image<P> {
         image
     }
 
-    pub fn from_raw<T>(
-        buffer: Vec<T>,
-        width: u32,
-        height: u32,
-    ) -> Option<Image<P>>
+    pub fn from_raw<T>(buffer: Vec<T>, width: u32, height: u32) -> Option<Image<P>>
     where
         T: ColorData,
         P: Pixel<ColorChannel = T>,
@@ -203,8 +204,8 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub struct Rgba<T: Num> {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rgba<T: ColorData> {
     pub data: [T; 4],
 }
 
@@ -246,7 +247,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Depth<T: ColorData> {
     pub data: [T; 1],
 }
@@ -271,9 +272,7 @@ impl<T: ColorData> Pixel for Depth<T> {
 
 impl<T: ColorData + 'static> From<Vector1<T>> for Depth<T> {
     fn from(depth: Vector1<T>) -> Depth<T> {
-        Depth {
-            data: [depth.x],
-        }
+        Depth { data: [depth.x] }
     }
 }
 

@@ -1,7 +1,7 @@
+use std::error::Error;
 use std::fs::{self, File};
 use std::io::BufReader;
 
-use failure::Error;
 use image::{self, imageops, ImageFormat};
 use nalgebra::{Vector2, Vector3, Vector4};
 use rusterizer::image::RgbaImage;
@@ -9,12 +9,11 @@ use wavefront_obj::obj::{self, ObjSet, Object, Primitive};
 
 use crate::attr::Attribute;
 
-pub fn load_image(path: &str) -> Result<RgbaImage<u8>, Error> {
+pub fn load_image(path: &str) -> Result<RgbaImage<u8>, Box<dyn Error>> {
     let texture_file = File::open(path)?;
     let texture_reader = BufReader::new(texture_file);
-    let texture = imageops::flip_vertical(
-        &image::load(texture_reader, ImageFormat::TGA)?.to_rgba(),
-    );
+    let texture =
+        imageops::flip_vertical(&image::load(texture_reader, ImageFormat::Tga)?.to_rgba());
 
     let width = texture.width();
     let height = texture.height();
@@ -22,7 +21,7 @@ pub fn load_image(path: &str) -> Result<RgbaImage<u8>, Error> {
     Ok(RgbaImage::from_raw(texture.into_raw(), width, height).unwrap())
 }
 
-pub fn load_model(path: &str) -> Result<Vec<Attribute>, Error> {
+pub fn load_model(path: &str) -> Result<Vec<Attribute>, Box<dyn Error>> {
     let model_string = fs::read_to_string(&path)?;
     let model = obj::parse(model_string).expect("failed to parse model");
 

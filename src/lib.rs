@@ -5,7 +5,7 @@ mod math;
 
 use std::f64;
 
-use nalgebra::{U2, U3, Vector2, Vector3, Vector4};
+use nalgebra::{Vector2, Vector3, Vector4, U2, U3};
 
 use crate::image::{Depth, DepthImage, Rgba, RgbaImage};
 use crate::shader::{ShaderProgram, Smooth};
@@ -45,7 +45,10 @@ impl Pipeline {
         let height = image_color.height();
 
         assert!(width == image_depth.width(), "images must have equal dims");
-        assert!(height == image_depth.height(), "images must have equal dims");
+        assert!(
+            height == image_depth.height(),
+            "images must have equal dims"
+        );
 
         let half_width = f64::from(width / 2);
         let half_height = f64::from(height / 2);
@@ -75,27 +78,17 @@ impl Pipeline {
                     _ => false,
                 };
 
-                if do_cull { continue; }
+                if do_cull {
+                    continue;
+                }
             }
 
             // TODO: clipping
             // TODO: viewport transform
 
-            let screen_a = world_to_screen(
-                from_homogenous(world_a),
-                half_width,
-                half_height,
-            );
-            let screen_b = world_to_screen(
-                from_homogenous(world_b),
-                half_width,
-                half_height,
-            );
-            let screen_c = world_to_screen(
-                from_homogenous(world_c),
-                half_width,
-                half_height,
-            );
+            let screen_a = world_to_screen(from_homogenous(world_a), half_width, half_height);
+            let screen_b = world_to_screen(from_homogenous(world_b), half_width, half_height);
+            let screen_c = world_to_screen(from_homogenous(world_c), half_width, half_height);
 
             self.triangle(
                 shader,
@@ -155,11 +148,7 @@ impl Pipeline {
 }
 
 /// Compute a normal vector for the face A, B, C
-fn face_normal(
-    a: &Vector3<f64>,
-    b: &Vector3<f64>,
-    c: &Vector3<f64>,
-) -> Vector3<f64> {
+fn face_normal(a: &Vector3<f64>, b: &Vector3<f64>, c: &Vector3<f64>) -> Vector3<f64> {
     let ab = b - a;
     let ac = c - a;
     ab.cross(&ac)
@@ -222,11 +211,7 @@ fn vec_to_rgba(color: Vector4<f64>) -> Rgba<u8> {
     }
 }
 
-fn world_to_screen(
-    world_coords: Vector4<f64>,
-    half_width: f64,
-    half_height: f64,
-) -> Vector4<f64> {
+fn world_to_screen(world_coords: Vector4<f64>, half_width: f64, half_height: f64) -> Vector4<f64> {
     Vector4::new(
         (world_coords.x + 1.0) * half_width,
         (world_coords.y + 1.0) * half_height,
