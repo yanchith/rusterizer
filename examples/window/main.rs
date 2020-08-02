@@ -138,7 +138,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .unwrap();
 
     let pipeline = Pipeline::with_options(PipelineOptions {
-        cull_face: Some(CullFace::Back),
+        cull_face: CullFace::Back,
         ..PipelineOptions::default()
     });
 

@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut shader = SimpleProgram::with_uniforms(proj, view, Vector3::new(0.0, 0.0, 1.0), texture);
 
     let pipeline = Pipeline::with_options(PipelineOptions {
-        cull_face: Some(CullFace::Back),
+        cull_face: CullFace::Back,
         ..PipelineOptions::default()
     });
 

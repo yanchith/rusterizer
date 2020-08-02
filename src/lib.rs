@@ -12,25 +12,30 @@ use crate::shader::{ShaderProgram, Smooth};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CullFace {
+    None,
     Front,
     Back,
     FrontAndBack,
 }
 
+impl Default for CullFace {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct PipelineOptions {
-    pub cull_face: Option<CullFace>,
+    pub cull_face: CullFace,
 }
 
 pub struct Pipeline {
-    cull_face: Option<CullFace>,
+    options: PipelineOptions,
 }
 
 impl Pipeline {
     pub fn with_options(options: PipelineOptions) -> Pipeline {
-        Pipeline {
-            cull_face: options.cull_face,
-        }
+        Pipeline { options }
     }
 
     pub fn triangles<S: ShaderProgram>(
@@ -63,17 +68,18 @@ impl Pipeline {
             let world_b = shader.vertex(&buffer[attr + 1], &mut var_b);
             let world_c = shader.vertex(&buffer[attr + 2], &mut var_c);
 
-            if let Some(cull_face) = self.cull_face {
+            if self.options.cull_face != CullFace::None {
                 let normal = face_normal(
                     &Vector3::new(world_a.x, world_a.y, world_a.z),
                     &Vector3::new(world_b.x, world_b.y, world_b.z),
                     &Vector3::new(world_c.x, world_c.y, world_c.z),
                 );
 
-                let do_cull = match cull_face {
+                let do_cull = match self.options.cull_face {
                     CullFace::FrontAndBack => true,
                     CullFace::Front => normal.z > 0.0,
                     CullFace::Back => normal.z < 0.0,
+                    CullFace::None => unreachable!(),
                 };
 
                 if do_cull {
