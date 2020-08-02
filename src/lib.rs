@@ -5,7 +5,7 @@ mod math;
 
 use std::f64;
 
-use nalgebra::{Vector2, Vector3, Vector4, U2, U3};
+use nalgebra::{Vector2, Vector3, Vector4};
 
 use crate::image::{Depth, DepthImage, Rgba, RgbaImage};
 use crate::shader::{ShaderProgram, Smooth};
@@ -36,7 +36,6 @@ impl Pipeline {
     pub fn triangles<S: ShaderProgram>(
         &self,
         shader: &S,
-        // TODO: Consider IntoIterator<Item = S::Attribute> instead of slice
         buffer: &[S::Attribute],
         image_color: &mut RgbaImage<u8>,
         image_depth: &mut DepthImage<f64>,
@@ -53,12 +52,12 @@ impl Pipeline {
         let half_width = f64::from(width / 2);
         let half_height = f64::from(height / 2);
 
-        let mut var_a = S::Varying::default();
-        let mut var_b = S::Varying::default();
-        let mut var_c = S::Varying::default();
-
         for i in 0..buffer.len() / 3 {
             let attr = i * 3;
+
+            let mut var_a = S::Varying::default();
+            let mut var_b = S::Varying::default();
+            let mut var_c = S::Varying::default();
 
             let world_a = shader.vertex(&buffer[attr], &mut var_a);
             let world_b = shader.vertex(&buffer[attr + 1], &mut var_b);
@@ -66,16 +65,15 @@ impl Pipeline {
 
             if let Some(cull_face) = self.cull_face {
                 let normal = face_normal(
-                    &world_a.fixed_rows::<U3>(0).clone_owned(),
-                    &world_b.fixed_rows::<U3>(0).clone_owned(),
-                    &world_c.fixed_rows::<U3>(0).clone_owned(),
+                    &Vector3::new(world_a.x, world_a.y, world_a.z),
+                    &Vector3::new(world_b.x, world_b.y, world_b.z),
+                    &Vector3::new(world_c.x, world_c.y, world_c.z),
                 );
 
                 let do_cull = match cull_face {
                     CullFace::FrontAndBack => true,
-                    CullFace::Front if normal.z > 0.0 => true,
-                    CullFace::Back if normal.z < 0.0 => true,
-                    _ => false,
+                    CullFace::Front => normal.z > 0.0,
+                    CullFace::Back => normal.z < 0.0,
                 };
 
                 if do_cull {
@@ -112,10 +110,9 @@ impl Pipeline {
         let width = image_color.width();
         let height = image_color.height();
 
-        // TODO: don't clone, find a way to solve VectorSlice2 type error
-        let a2 = a.fixed_rows::<U2>(0).clone_owned();
-        let b2 = b.fixed_rows::<U2>(0).clone_owned();
-        let c2 = c.fixed_rows::<U2>(0).clone_owned();
+        let a2 = Vector2::new(a.x, a.y);
+        let b2 = Vector2::new(b.x, b.y);
+        let c2 = Vector2::new(c.x, c.y);
 
         let (topleft, bottomright) = bounding_box(&a2, &b2, &c2, width, height);
 
