@@ -1,5 +1,3 @@
-use nalgebra;
-
 use std::env;
 use std::error::Error;
 use std::f64::consts::PI;
