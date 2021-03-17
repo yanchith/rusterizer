@@ -5,9 +5,9 @@ authors = ["yanchith <yanchi.toth@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-nalgebra = "0.21.1"
+glam = "0.13.0"
 
 [dev-dependencies]
 image = "0.23.8"
-minifb = "0.17.0"
+minifb = "0.19.2"
 wavefront_obj = "8.0.0"

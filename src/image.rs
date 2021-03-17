@@ -1,81 +1,55 @@
 use std::fmt::Debug;
-use std::mem;
-use std::slice::{Chunks, ChunksMut};
+use std::slice;
 
-use nalgebra::{Vector1, Vector2, Vector4};
+use glam::{Vec2, Vec4};
 
-use crate::math;
-
-pub type RgbaImage<T> = Image<Rgba<T>>;
-pub type DepthImage<T> = Image<Depth<T>>;
-
-pub trait ColorData: PartialEq + Copy + Clone + Debug {}
-
-impl ColorData for usize {}
-impl ColorData for u8 {}
-impl ColorData for u16 {}
-impl ColorData for u32 {}
-impl ColorData for u64 {}
-impl ColorData for u128 {}
-
-impl ColorData for isize {}
-impl ColorData for i8 {}
-impl ColorData for i16 {}
-impl ColorData for i32 {}
-impl ColorData for i64 {}
-impl ColorData for i128 {}
-
-impl ColorData for f32 {}
-impl ColorData for f64 {}
-
-pub trait Pixel: Copy {
-    type ColorChannel: ColorData;
-    fn channel_count() -> u8;
-    fn from_slice(slice: &[Self::ColorChannel]) -> &Self;
-    fn from_slice_mut(slice: &mut [Self::ColorChannel]) -> &mut Self;
-}
+use crate::convert::cast_usize;
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Image<P: Pixel> {
+pub struct Image {
     width: usize,
     height: usize,
-    buffer: Vec<P::ColorChannel>,
+    buffer: Vec<u32>,
 }
 
-impl<P: Pixel> Image<P> {
-    pub fn new(width: u32, height: u32) -> Image<P> {
-        let w = width as usize;
-        let h = height as usize;
-        let c = P::channel_count() as usize;
-        // SAFETY: This is only safe because we only implement ColorData for the
-        // numeric primitive types, which all do have a valid zeroed
-        // representation.
-        let zero: P::ColorChannel = unsafe { mem::zeroed() };
+impl Image {
+    pub fn new(width: u32, height: u32) -> Image {
+        let w = cast_usize(width);
+        let h = cast_usize(height);
 
         Image {
             width: w,
             height: h,
-            buffer: vec![zero; w * h * c],
+            buffer: vec![0; w * h],
         }
     }
 
-    pub fn from_pixel(width: u32, height: u32, pixel: P) -> Image<P> {
+    pub fn from_pixel_rgba(width: u32, height: u32, pixel: [u8; 4]) -> Image {
         let mut image = Image::new(width, height);
-        for p in image.pixels_mut() {
-            *p = pixel;
+
+        let pixel_u32 = u32::from_le_bytes(pixel);
+        for p in image.buffer.iter_mut() {
+            *p = pixel_u32;
         }
+
         image
     }
 
-    pub fn from_raw<T>(buffer: Vec<T>, width: u32, height: u32) -> Option<Image<P>>
-    where
-        T: ColorData,
-        P: Pixel<ColorChannel = T>,
-    {
-        let w = width as usize;
-        let h = height as usize;
-        let c = P::channel_count() as usize;
-        if w * h * c <= buffer.len() {
+    pub fn from_pixel_depth(width: u32, height: u32, pixel: f32) -> Image {
+        let mut image = Image::new(width, height);
+
+        let pixel_u32 = pixel.to_bits();
+        for p in image.buffer.iter_mut() {
+            *p = pixel_u32;
+        }
+
+        image
+    }
+
+    pub fn from_raw(buffer: Vec<u32>, width: u32, height: u32) -> Option<Image> {
+        let w = cast_usize(width);
+        let h = cast_usize(height);
+        if w * h <= buffer.len() {
             Some(Image {
                 width: w,
                 height: h,
@@ -86,57 +60,83 @@ impl<P: Pixel> Image<P> {
         }
     }
 
-    pub fn into_raw(self) -> Vec<P::ColorChannel> {
+    pub fn into_raw(self) -> Vec<u32> {
         self.buffer
     }
 
-    pub fn pixels(&self) -> Pixels<'_, P> {
-        let channel_count = P::channel_count() as usize;
-        Pixels {
-            chunks: self.buffer.chunks(channel_count),
+    pub fn pixels_mut_rgba(&mut self) -> PixelsMutRgba<'_> {
+        PixelsMutRgba {
+            iter: self.buffer.iter_mut(),
         }
     }
 
-    pub fn pixels_mut(&mut self) -> PixelsMut<'_, P> {
-        let channel_count = P::channel_count() as usize;
-        PixelsMut {
-            chunks: self.buffer.chunks_mut(channel_count),
+    pub fn pixels_mut_depth(&mut self) -> PixelsMutDepth<'_> {
+        PixelsMutDepth {
+            iter: self.buffer.iter_mut(),
         }
     }
 
-    pub fn pixel(&self, x: u32, y: u32) -> &P {
-        let channel_count = P::channel_count() as usize;
-        let index = channel_count * (y as usize * self.width + x as usize);
-        P::from_slice(&self.buffer[index..index + channel_count])
+    pub fn pixel_rgba(&self, x: u32, y: u32) -> [u8; 4] {
+        let index = cast_usize(y) * self.width + cast_usize(x);
+        let pixel_u32 = self.buffer[index];
+
+        pixel_u32.to_le_bytes()
     }
 
-    pub fn pixel_mut(&mut self, x: u32, y: u32) -> &mut P {
-        let channel_count = P::channel_count() as usize;
-        let index = channel_count * (y as usize * self.width + x as usize);
-        P::from_slice_mut(&mut self.buffer[index..index + channel_count])
+    pub fn pixel_depth(&self, x: u32, y: u32) -> f32 {
+        let index = cast_usize(y) * self.width + cast_usize(x);
+        let pixel_u32 = self.buffer[index];
+
+        f32::from_bits(pixel_u32)
     }
 
-    // TODO: make uv generic over all float vectors
-    pub fn sample_nearest<V>(&self, uv: &Vector2<f64>) -> V
-    where
-        P: Into<V>,
-    {
-        let u = math::clamp(uv.x, 0.0, 1.0);
-        let v = math::clamp(uv.y, 0.0, 1.0);
+    pub fn pixel_mut_rgba(&mut self, x: u32, y: u32) -> &mut [u8; 4] {
+        let index = cast_usize(y) * self.width + cast_usize(x);
+        let pixel_u32 = &mut self.buffer[index];
 
-        let x = u * self.width.saturating_sub(1) as f64;
-        let y = v * self.height.saturating_sub(1) as f64;
-
-        let pixel = self.pixel(x as u32, y as u32);
-        Into::<V>::into(*pixel)
+        unsafe { &mut *(pixel_u32 as *mut u32 as *mut [u8; 4]) }
     }
 
-    pub fn set_pixel(&mut self, x: u32, y: u32, pixel: P) {
-        *self.pixel_mut(x, y) = pixel;
+    pub fn pixel_mut_depth(&mut self, x: u32, y: u32) -> &mut f32 {
+        let index = cast_usize(y) * self.width + cast_usize(x);
+        let pixel_u32 = &mut self.buffer[index];
+
+        unsafe { &mut *(pixel_u32 as *mut u32 as *mut f32) }
     }
 
-    pub fn clear(&mut self, pixel: P) {
-        for p in self.pixels_mut() {
+    pub fn sample_nearest_rgba(&self, uv: Vec2) -> Vec4 {
+        let u = uv.x.clamp(0.0, 1.0);
+        let v = uv.y.clamp(0.0, 1.0);
+
+        let x = u * self.width.saturating_sub(1) as f32;
+        let y = v * self.height.saturating_sub(1) as f32;
+
+        let pixel = self.pixel_rgba(x as u32, y as u32);
+
+        Vec4::new(
+            pixel[0] as f32 / 255.0,
+            pixel[1] as f32 / 255.0,
+            pixel[2] as f32 / 255.0,
+            pixel[3] as f32 / 255.0,
+        )
+    }
+
+    pub fn set_pixel_rgba(&mut self, x: u32, y: u32, pixel: [u8; 4]) {
+        *self.pixel_mut_rgba(x, y) = pixel;
+    }
+
+    pub fn set_pixel_depth(&mut self, x: u32, y: u32, pixel: f32) {
+        *self.pixel_mut_depth(x, y) = pixel;
+    }
+
+    pub fn clear_rgba(&mut self, pixel: [u8; 4]) {
+        for p in self.pixels_mut_rgba() {
+            *p = pixel;
+        }
+    }
+
+    pub fn clear_depth(&mut self, pixel: f32) {
+        for p in self.pixels_mut_depth() {
             *p = pixel;
         }
     }
@@ -154,136 +154,36 @@ impl<P: Pixel> Image<P> {
     }
 }
 
-impl<T, P> AsRef<[T]> for Image<P>
-where
-    T: ColorData,
-    P: Pixel<ColorChannel = T>,
-{
-    fn as_ref(&self) -> &[T] {
+impl AsRef<[u32]> for Image {
+    fn as_ref(&self) -> &[u32] {
         &self.buffer
     }
 }
 
-pub struct Pixels<'a, P>
-where
-    P: Pixel + 'a,
-    P::ColorChannel: 'a,
-{
-    chunks: Chunks<'a, P::ColorChannel>,
+pub struct PixelsMutRgba<'a> {
+    iter: slice::IterMut<'a, u32>,
 }
 
-impl<'a, P> Iterator for Pixels<'a, P>
-where
-    P: Pixel + 'a,
-    P::ColorChannel: 'a,
-{
-    type Item = &'a P;
+impl<'a> Iterator for PixelsMutRgba<'a> {
+    type Item = &'a mut [u8; 4];
 
-    fn next(&mut self) -> Option<&'a P> {
-        self.chunks.next().map(|v| P::from_slice(v))
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|v| unsafe { &mut *(v as *mut u32 as *mut [u8; 4]) })
     }
 }
 
-pub struct PixelsMut<'a, P>
-where
-    P: Pixel + 'a,
-    P::ColorChannel: 'a,
-{
-    chunks: ChunksMut<'a, P::ColorChannel>,
+pub struct PixelsMutDepth<'a> {
+    iter: slice::IterMut<'a, u32>,
 }
 
-impl<'a, P> Iterator for PixelsMut<'a, P>
-where
-    P: Pixel + 'a,
-    P::ColorChannel: 'a,
-{
-    type Item = &'a mut P;
+impl<'a> Iterator for PixelsMutDepth<'a> {
+    type Item = &'a mut f32;
 
-    fn next(&mut self) -> Option<&'a mut P> {
-        self.chunks.next().map(|v| P::from_slice_mut(v))
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Rgba<T: ColorData> {
-    pub data: [T; 4],
-}
-
-impl<T: ColorData> Pixel for Rgba<T> {
-    type ColorChannel = T;
-
-    fn channel_count() -> u8 {
-        4
-    }
-
-    fn from_slice(slice: &[T]) -> &Self {
-        assert_eq!(slice.len(), 4);
-        unsafe { &*(slice.as_ptr() as *const Rgba<T>) }
-    }
-
-    fn from_slice_mut(slice: &mut [T]) -> &mut Self {
-        assert_eq!(slice.len(), 4);
-        unsafe { &mut *(slice.as_mut_ptr() as *mut Rgba<T>) }
-    }
-}
-
-impl<T: ColorData + 'static> From<Vector4<T>> for Rgba<T> {
-    fn from(v: Vector4<T>) -> Rgba<T> {
-        Rgba {
-            data: [v.x, v.y, v.z, v.w],
-        }
-    }
-}
-
-// Orphan rules T_T
-impl<T, U> Into<Vector4<T>> for Rgba<U>
-where
-    T: ColorData + 'static,
-    U: Into<T> + ColorData + 'static,
-{
-    fn into(self) -> Vector4<T> {
-        let [r, g, b, a] = self.data;
-        Vector4::new(r.into(), g.into(), b.into(), a.into())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Depth<T: ColorData> {
-    pub data: [T; 1],
-}
-
-impl<T: ColorData> Pixel for Depth<T> {
-    type ColorChannel = T;
-
-    fn channel_count() -> u8 {
-        1
-    }
-
-    fn from_slice(slice: &[T]) -> &Self {
-        assert_eq!(slice.len(), 1);
-        unsafe { &*(slice.as_ptr() as *const Depth<T>) }
-    }
-
-    fn from_slice_mut(slice: &mut [T]) -> &mut Self {
-        assert_eq!(slice.len(), 1);
-        unsafe { &mut *(slice.as_mut_ptr() as *mut Depth<T>) }
-    }
-}
-
-impl<T: ColorData + 'static> From<Vector1<T>> for Depth<T> {
-    fn from(depth: Vector1<T>) -> Depth<T> {
-        Depth { data: [depth.x] }
-    }
-}
-
-// Orphan rules T_T
-impl<T, U> Into<Vector1<T>> for Depth<U>
-where
-    T: ColorData + 'static,
-    U: Into<T> + ColorData + 'static,
-{
-    fn into(self) -> Vector1<T> {
-        let [depth] = self.data;
-        Vector1::new(depth.into())
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter
+            .next()
+            .map(|v| unsafe { &mut *(v as *mut u32 as *mut f32) })
     }
 }

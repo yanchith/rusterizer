@@ -43,7 +43,7 @@ impl ShaderProgram for SimpleProgram {
 ```
 
 - proc macro derive for `Smooth`
-- polish nalgebra interop (From/Into impls)
+- polish glam interop (From/Into impls)
   * float normalization in From/Into impls?
   * float normalization in image?
 - triangle clipping

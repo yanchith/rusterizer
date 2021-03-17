@@ -1,56 +1,56 @@
-use nalgebra;
-
 use std::env;
 use std::error::Error;
-use std::f64;
-use std::f64::consts::PI;
+use std::f32;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use nalgebra::{Matrix4, Point3, Vector2, Vector3, Vector4};
-use rusterizer::image::{Depth, DepthImage, Rgba, RgbaImage};
+use glam::{Mat4, Vec2, Vec3, Vec4};
+use rusterizer::image::Image;
 use rusterizer::shader::{ShaderProgram, Smooth};
 use rusterizer::{CullFace, Pipeline, PipelineOptions};
 
+// TODO(yan): Rustfmt doesn't like these paths in 1.50.0
+#[rustfmt::skip]
+#[path = "../attr.rs"]
 mod attr;
+#[rustfmt::skip]
+#[path = "../loader.rs"]
 mod loader;
 
-const WIDTH: u32 = 80;
+const WIDTH: u32 = 120;
 const HEIGHT: u32 = 80;
 
-fn black() -> Rgba<u8> {
-    Rgba {
-        data: [0, 0, 0, 255],
-    }
+fn black() -> [u8; 4] {
+    [0, 0, 0, 255]
 }
 
-fn depth() -> Depth<f64> {
-    Depth { data: [1.0] }
+fn depth() -> f32 {
+    1.0
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 struct Varying {
-    pub norm: Vector3<f64>,
-    pub uv: Vector2<f64>,
-    pub light_intensity: f64,
+    pub norm: Vec3,
+    pub uv: Vec2,
+    pub light_intensity: f32,
 }
 
 impl Default for Varying {
     fn default() -> Varying {
         Varying {
-            norm: Vector3::zeros(),
-            uv: Vector2::zeros(),
+            norm: Vec3::ZERO,
+            uv: Vec2::ZERO,
             light_intensity: 0.0,
         }
     }
 }
 
 impl Smooth for Varying {
-    fn interpolate(a: &Varying, b: &Varying, c: &Varying, bc: &Vector3<f64>) -> Varying {
+    fn interpolate(a: &Varying, b: &Varying, c: &Varying, bc: Vec3) -> Varying {
         Varying {
-            norm: Vector3::interpolate(&a.norm, &b.norm, &c.norm, bc),
-            uv: Vector2::interpolate(&a.uv, &b.uv, &c.uv, bc),
-            light_intensity: f64::interpolate(
+            norm: Vec3::interpolate(&a.norm, &b.norm, &c.norm, bc),
+            uv: Vec2::interpolate(&a.uv, &b.uv, &c.uv, bc),
+            light_intensity: f32::interpolate(
                 &a.light_intensity,
                 &b.light_intensity,
                 &c.light_intensity,
@@ -61,19 +61,14 @@ impl Smooth for Varying {
 }
 
 struct SimpleProgram {
-    u_proj: Matrix4<f64>,
-    u_view: Matrix4<f64>,
-    u_light_dir: Vector3<f64>,
-    u_tex: RgbaImage<u8>,
+    u_proj: Mat4,
+    u_view: Mat4,
+    u_light_dir: Vec3,
+    u_tex: Image,
 }
 
 impl SimpleProgram {
-    pub fn with_uniforms(
-        proj: Matrix4<f64>,
-        view: Matrix4<f64>,
-        light_dir: Vector3<f64>,
-        tex: RgbaImage<u8>,
-    ) -> SimpleProgram {
+    pub fn with_uniforms(proj: Mat4, view: Mat4, light_dir: Vec3, tex: Image) -> SimpleProgram {
         SimpleProgram {
             u_proj: proj,
             u_view: view,
@@ -82,7 +77,7 @@ impl SimpleProgram {
         }
     }
 
-    pub fn set_view(&mut self, view: Matrix4<f64>) {
+    pub fn set_view(&mut self, view: Mat4) {
         self.u_view = view;
     }
 }
@@ -91,21 +86,24 @@ impl ShaderProgram for SimpleProgram {
     type Attribute = attr::Attribute;
     type Varying = Varying;
 
-    fn vertex(&self, attr: &Self::Attribute, var: &mut Self::Varying) -> Vector4<f64> {
+    fn vertex(&self, attr: &Self::Attribute, var: &mut Self::Varying) -> Vec4 {
         let normal = attr.norm.normalize();
-        let light_intensity = normal.dot(&self.u_light_dir);
+        let light_intensity = normal.dot(self.u_light_dir);
 
         var.norm = normal;
         var.uv = attr.uv;
         var.light_intensity = light_intensity;
 
-        self.u_proj * self.u_view * attr.pos
+        let m = self.u_proj * self.u_view;
+
+        m * attr.pos
     }
 
-    fn fragment(&self, _pos: &Vector4<f64>, var: &Self::Varying) -> Vector4<f64> {
-        let color_tex = self.u_tex.sample_nearest::<Vector4<f64>>(&var.uv) / 255.0;
+    fn fragment(&self, _pos: Vec4, var: &Self::Varying) -> Vec4 {
+        let color_tex = self.u_tex.sample_nearest_rgba(var.uv);
         let color = color_tex * var.light_intensity;
-        Vector4::new(color.x, color.y, color.z, 1.0)
+
+        Vec4::new(color.x, color.y, color.z, 1.0)
     }
 }
 
@@ -114,21 +112,26 @@ fn main() -> Result<(), Box<dyn Error>> {
     let model_path = args.next().expect("USAGE: prog modelpath texpath");
     let tex_path = args.next().expect("USAGE: prog modelpath texpath");
 
-    let mut color_image = RgbaImage::from_pixel(WIDTH, HEIGHT, black());
-    let mut depth_image = DepthImage::from_pixel(WIDTH, HEIGHT, depth());
+    let mut color_image = Image::from_pixel_rgba(WIDTH, HEIGHT, black());
+    let mut depth_image = Image::from_pixel_depth(WIDTH, HEIGHT, depth());
 
     let texture = loader::load_image(&tex_path)?;
     let attributes = loader::load_model(&model_path)?;
 
-    let proj = Matrix4::new_perspective(WIDTH as f64 / HEIGHT as f64, PI / 4.0, 0.1, 10.0);
-
-    let view = Matrix4::look_at_rh(
-        &Point3::new(0.0, 0.0, 3.0),
-        &Point3::new(0.0, 0.0, 0.0),
-        &Vector3::new(0.0, 1.0, 0.0),
+    let proj = Mat4::perspective_rh_gl(
+        WIDTH as f32 / HEIGHT as f32,
+        f32::consts::PI / 4.0,
+        0.1,
+        10.0,
     );
 
-    let mut shader = SimpleProgram::with_uniforms(proj, view, Vector3::new(0.0, 0.0, 1.0), texture);
+    let view = Mat4::look_at_rh(
+        Vec3::new(0.0, 0.0, 3.0),
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+    );
+
+    let mut shader = SimpleProgram::with_uniforms(proj, view, Vec3::new(0.0, 0.0, 1.0), texture);
 
     let pipeline = Pipeline::with_options(PipelineOptions {
         cull_face: CullFace::Back,
@@ -143,17 +146,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         let total_duration = start_time.elapsed();
         let frame_start_time = Instant::now();
 
-        let t = total_duration.as_secs_f64();
-        let view = Matrix4::look_at_rh(
-            &Point3::new(3.0 * t.sin(), 0.0, 3.0 * t.cos()),
-            &Point3::new(0.0, 0.0, 0.0),
-            &Vector3::new(0.0, 1.0, 0.0),
+        let t = total_duration.as_secs_f32();
+        let view = Mat4::look_at_rh(
+            Vec3::new(3.0 * t.sin(), 0.0, 3.0 * t.cos()),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
         );
 
         shader.set_view(view);
 
-        color_image.clear(black());
-        depth_image.clear(depth());
+        color_image.clear_rgba(black());
+        depth_image.clear_depth(depth());
         pipeline.triangles(&shader, &attributes, &mut color_image, &mut depth_image);
 
         let output = render(&color_image);
@@ -192,7 +195,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 /// Returns a string that, when printed to the terminal, renders the given image.
-fn render(image: &RgbaImage<u8>) -> String {
+fn render(image: &Image) -> String {
     // The image should not be empty and must have an even number of rows because
     // two rows are represented by each line of output
     assert!(image.height() > 0 && image.width() > 0);
@@ -205,13 +208,13 @@ fn render(image: &RgbaImage<u8>) -> String {
 
     for i in 0..row_count {
         for j in 0..row_length {
-            let top = image.pixel(j, 2 * i);
-            let bottom = image.pixel(j, 2 * i + 1);
+            let top = image.pixel_rgba(j, 2 * i);
+            let bottom = image.pixel_rgba(j, 2 * i + 1);
 
             // Unicode UPPER HALF BLOCK with foreground (top) and background
             // (bottom) color
-            let [tr, tg, tb, _] = top.data;
-            let [br, bg, bb, _] = bottom.data;
+            let [tr, tg, tb, _] = top;
+            let [br, bg, bb, _] = bottom;
             let block = format!(
                 "\x1B[38;2;{};{};{};48;2;{};{};{}m\u{2580}",
                 tr, tg, tb, br, bg, bb,
